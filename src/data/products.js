@@ -1,127 +1,182 @@
 /* =============================================
    DRAGON KEYS — products.js
-   
    ✏️  ADD/EDIT PRODUCTS HERE.
-   
-   FIELD REFERENCE:
-   
-   id              — unique string, no spaces (used in URLs)
-   name            — display name
-   category        — "Keyboard" | "Keychain" | "3D Printed" | "Service"
-   description     — 1-2 sentence description
-   price           — price string for display (e.g. "₹4,999" or "From ₹299")
-   images          — array of image paths (first is primary)
-   
-   fulfillment     — "queue" | "email"
-                     "queue"  → physical product; goes into the production queue,
-                               requires login, booking form, admin fulfillment
-                     "email"  → service/custom request; routes to your support email
-   
-   throughputPerDay — (queue products only) how many you can make per day.
-                      Examples: 4 (four per day), 0.5 (one every 2 days), 
-                                0.33 (one every 3 days)
-                      For "1 every 2 days" → use 0.5
-                      For "4 per day"      → use 4
-   
-   openSource      — { github: "url" | null, cults3d: "url" | null }
-                     Set either to null if not applicable.
-                     If both are null, no OSS links will show.
-   
-   specs           — optional array of { label, value } pairs
-   ============================================= */
+
+   REQUIRED fields for every product:
+     id, name, category, fulfillment, description, price, images, openSource
+
+   fulfillment: "queue" = booking form + login + production queue
+                "email" = routes straight to support email
+
+   throughputPerDay (queue only):
+     4   = four per day
+     0.5 = one every 2 days
+     0.33 = one every 3 days
+
+   specs: array of { label, rows: [{key, value}] }
+   notes: array of { type: "info"|"caution"|"tip", text }
+   images: paths from /public folder, e.g. "assets/mudflaps/photo.jpg"
+============================================= */
 
 export const PRODUCTS = [
   {
-    id: 'triumph-speed-400-mudflap',
-    name: 'Triumph Speed 400 Mudflap',
-    category: '3D Printed',
+    id: "dragonfly-67",
+    name: "Dragonfly 67",
+    category: "Keyboard",
+    fulfillment: "queue",
+    throughputPerDay: 0.5,
     description:
-      'Clip-on TPU mudflap for the Triumph Speed 400. No drilling, no modifications — slides onto the OEM bracket in under a minute.',
-    price: '₹499',
+      "A handcrafted 67-key split mechanical keyboard inspired by the ROG Falcata. Features RP2040 Zero with QMK/VIAL support, three Deej audio sliders, a rotary encoder, and an ergonomic 3D-printed design with TRRS interconnect and USB-C input.",
+    price: "₹5,200",
     images: [
-      // 'assets/products/mudflaps/speed-400-1.jpg',
-      // 'assets/products/mudflaps/speed-400-2.jpg',
+      // Uncomment once photos are in public/assets/keyboards/dragonfly67/
+      "assets/keyboards/dragonfly67/_dsc8664_edited_lrc.png",
+      "assets/keyboards/dragonfly67/_dsc8665_edited_lrc.png",
+      "assets/keyboards/dragonfly67/_dsc8666_edited_lrc.png",
+      "assets/keyboards/dragonfly67/_dsc8667_edited_lrc.png",
     ],
-    fulfillment: 'queue',
-    throughputPerDay: 4, // 4 per day (upgraded from 3)
     openSource: {
-      github: 'https://github.com/dragonkeys/triumph-mudflap',
-      cults3d: 'https://cults3d.com/en/3d-model/dragonkeys-mudflap',
-    },
-    specs: [
-      { label: 'Material', value: 'TPU 95A (flexible)' },
-      { label: 'Infill', value: '40% gyroid' },
-      { label: 'Fitment', value: 'OEM bracket — no drilling' },
-    ],
-  },
-
-  {
-    id: 'dragonfly-67-keyboard',
-    name: 'Dragonfly 67 Keyboard',
-    category: 'Keyboard',
-    description:
-      'A 67-key split-layout keyboard with hot-swap sockets, VIAL firmware, and deej compatibility. Hand-wired, hand-assembled, built to order.',
-    price: '₹6,499',
-    images: [
-      // 'assets/products/keyboards/dragonfly-67-1.jpg',
-    ],
-    fulfillment: 'queue',
-    throughputPerDay: 0.5, // 1 every 2 days
-    openSource: {
-      github: 'https://github.com/dragonkeys/dragonfly-67',
+      github: "https://github.com/ThiwakarS/Dragon-Keys-3d-model-files",
       cults3d: null,
     },
     specs: [
-      { label: 'Switches', value: 'Gateron Yellow (swappable)' },
-      { label: 'Controller', value: 'RP2040 Zero' },
-      { label: 'Firmware', value: 'QMK + VIAL' },
-      { label: 'Plate', value: 'FR4 fibreglass' },
+      {
+        label: "Build",
+        rows: [
+          { key: "Layout",        value: "Alice (ergonomic split)" },
+          { key: "Case Material", value: "3D Printed PLA" },
+          { key: "Color",         value: "Matte black with teal green and pink switches" },
+        ],
+      },
+      {
+        label: "Electronics",
+        rows: [
+          { key: "Switches",   value: "Gateron Yellow Linear (lubed)" },
+          { key: "Controller", value: "RP2040 Zero" },
+          { key: "Firmware",   value: "QMK + VIAL" },
+          { key: "Connection", value: "USB-C + TRRS split cable" },
+          { key: "RGB",        value: "2 RGB LEDs with capslock and scroll lock indicators" },
+        ],
+      },
+      {
+        label: "Keycaps",
+        rows: [
+          { key: "Profile",  value: "Cherry" },
+          { key: "Material", value: "PLA" },
+          { key: "Legend",   value: "Custom blank available on request" },
+        ],
+      },
+    ],
+    notes: [
+      { type: "info",    text: "Firmware is pre-flashed. Remap keys live using the VIAL app — no reflashing needed." },
+      { type: "info",    text: "Delivery charges will be calculated at the time of delivery." },
+      { type: "info",    text: "Based in Chennai, Tamilnadu — happy to do on-site collection. Contact me on WhatsApp." },
+      { type: "caution", text: "Do not plug in both halves simultaneously. Always connect the primary (left) half to your PC first, then connect the TRRS cable." },
     ],
   },
 
   {
-    id: 'custom-keychain',
-    name: 'Custom Keychain',
-    category: 'Keychain',
+    id: "keychain-service",
+    name: "Keychains",
+    category: "Keychain",
+    fulfillment: "email",
     description:
-      'Custom 3D-printed keychains — names, logos, dragons, whatever you want. Email me your design idea and I\'ll get back with a quote.',
-    price: 'From ₹199',
+      "Transform your vision into a tangible accessory with our custom-designed, 3D-printed keychains. Precision engineering with personalized flair — high-quality gifts tailored to your style.",
+    price: "₹40 onwards",
     images: [
-      // 'assets/products/keychains/sample.jpg',
+      "assets/keychains/20250912_170251.jpg",
+      "assets/keychains/20250927_190548.jpg",
+      "assets/keychains/20250927_180329.jpg",
+      "assets/keychains/20250820_220629.jpg",
     ],
-    fulfillment: 'email',
-    openSource: {
-      github: null,
-      cults3d: null,
-    },
-    specs: [
-      { label: 'Material', value: 'PLA+ / PETG / Resin' },
-      { label: 'Turnaround', value: '3–7 days after design approval' },
-    ],
-  },
-
-  {
-    id: 'custom-keyboard-build',
-    name: 'Custom Keyboard Build Service',
-    category: 'Service',
-    description:
-      'Bring me a kit, I\'ll build it. Lubing, filming, soldering, assembly — full build service with tuning notes. Pricing depends on the kit.',
-    price: 'Quoted per build',
-    images: [],
-    fulfillment: 'email',
     openSource: { github: null, cults3d: null },
     specs: [
-      { label: 'Includes', value: 'Lube, film, assemble, test, tune' },
-      { label: 'Turnaround', value: 'Usually under 10 days' },
+      {
+        label: "Material & Print",
+        rows: [
+          { key: "Material", value: "PLA" },
+          { key: "Colour",   value: "Based on user preference" },
+        ],
+      },
+    ],
+    notes: [
+      { type: "info", text: "Cost calculated based on material and print time." },
+      { type: "info", text: "Single and bulk orders welcome." },
+      { type: "info", text: "Delivery charges calculated at time of delivery." },
+      { type: "info", text: "Based in Chennai, Tamilnadu — happy to do on-site collection. Contact me on WhatsApp." },
+    ],
+  },
+
+  {
+    id: "mudflap-triumph-400",
+    name: "Triumph Speed / Scrambler 400x Mudflap",
+    category: "3D Printed",
+    fulfillment: "queue",
+    throughputPerDay: 4,
+    description:
+      "Custom-designed rear mudflap for the Triumph Speed 400, Scrambler 400x, Speed T4, Thruxton 400 and Scrambler 400xc, printed in flexible TPU95A. Easy installation.",
+    price: "₹450 – 490",
+    images: [
+      // Uncomment once photos are in public/assets/mudflaps/
+      "assets/mudflaps/20260308_103458.jpg",
+      "assets/mudflaps/20260308_103515.jpg",
+      "assets/mudflaps/20260308_103532.jpg",
+      "assets/mudflaps/20260308_103608.jpg",
+      "assets/mudflaps/20260308_103651.jpg",
+      "assets/mudflaps/20260331_100429.jpg",
+      "assets/mudflaps/20260331_100438.jpg",
+      "assets/mudflaps/20260403_200923.jpg",
+      "assets/mudflaps/20260308_103652.jpg",
+      "assets/mudflaps/20260123_192234.jpg",
+      "assets/mudflaps/20260123_192240.jpg",
+      "assets/mudflaps/20260123_192250.jpg",
+      "assets/mudflaps/20260125_145727.jpg",
+      "assets/mudflaps/20260125_145730.jpg",
+      "assets/mudflaps/20260125_145734.jpg",
+      "assets/mudflaps/20260127_145813.jpg",
+      "assets/mudflaps/20260129_155141.jpg",
+      "assets/mudflaps/20260130_074727.jpg",
+      "assets/mudflaps/20260131_084233.jpg",
+    ],
+    openSource: {
+      github: null,
+      cults3d: "https://cults3d.com/en/users/thiwakar/3d-models",
+    },
+    specs: [
+      {
+        label: "Material & Print",
+        rows: [
+          { key: "Material", value: "Elegoo TPU 95A (flexible)" },
+          { key: "Colour",   value: "Matte black (standard)" },
+        ],
+      },
+      {
+        label: "Fitment",
+        rows: [
+          { key: "Compatible",         value: "Triumph Speed 400, Scrambler 400x, Speed T4, Thruxton 400, Scrambler 400xc" },
+          { key: "Mounting",           value: "Rear fender holes — sits between nut and washer. Order: Nut → Mudflap → Washer" },
+          { key: "Print Instructions", value: "No supports. 0.2mm layer height, Gyroid infill 15% density" },
+        ],
+      },
+    ],
+    notes: [
+      { type: "info",    text: "Scrambler variants — ₹490 · Speed variants — ₹450 · Advance — ₹200" },
+      { type: "info",    text: "Open source for personal use only. Files on Cults3D." },
+      { type: "info",    text: "Delivery charges calculated at time of delivery." },
+      { type: "info",    text: "Based in Chennai, Tamilnadu — collect on site and I'll install it for free. Contact me on WhatsApp." },
+      { type: "info",    text: "Installation: Two mounting holes under the seat. Remove the bolt (Allen key 5mm — in stock toolkit). Pinch the mat: Nut → TPU mat → Washer. Tighten firmly until snug." },
+      { type: "tip",     text: "Before fitting, clean the bolt and mudguard. Apply a small amount of oil where the nut spins — stops the mat from rotating while tightening." },
+      { type: "caution", text: "If the mat rotates with the nut: back off a quarter turn, hold the mat flat with your finger, then re-tighten. End result — mat should sit flush with the underside of the fender." },
+      { type: "tip",     text: "If the lower tape section comes loose, reapply double-sided tape. Avoid high-pressure washing near the mount." },
+      { type: "info",    text: "Scrambler 400x variants are 2cm longer than Speed 400 variants." },
     ],
   },
 ];
 
-// Helpers used across the app
 export function findProduct(id) {
   return PRODUCTS.find((p) => p.id === id);
 }
 
 export function queueProducts() {
-  return PRODUCTS.filter((p) => p.fulfillment === 'queue');
+  return PRODUCTS.filter((p) => p.fulfillment === "queue");
 }

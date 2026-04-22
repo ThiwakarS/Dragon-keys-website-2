@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { renderMarkdown } from '../lib/markdown.jsx';
 
 export function BlogCard({ post, onOpen }) {
@@ -36,12 +36,33 @@ export function BlogModal({ post, onClose }) {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 760 }}>
+      <div
+        className="modal"
+        onClick={(e) => e.stopPropagation()}
+        style={{ maxWidth: 760 }}
+      >
         <button className="modal-close" onClick={onClose} aria-label="Close">✕</button>
 
+        {/* Cover — natural aspect ratio, not forced 16:9 */}
         {post.coverImage && (
-          <div style={{ marginBottom: 24, aspectRatio: '16 / 9', overflow: 'hidden', borderRadius: 10 }}>
-            <img src={post.coverImage} alt={post.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          <div
+            className="blog-modal-cover"
+            style={{
+              marginBottom: 24,
+              overflow: 'hidden',
+              borderRadius: 10,
+              background: 'var(--card-2)',
+              display: 'flex',
+              justifyContent: 'center',
+              maxHeight: 420,
+            }}
+          >
+            <img
+              src={post.coverImage}
+              alt={post.title}
+              style={{ maxWidth: '100%', maxHeight: 420, height: 'auto', display: 'block' }}
+              loading="lazy"
+            />
           </div>
         )}
 
@@ -52,7 +73,25 @@ export function BlogModal({ post, onClose }) {
 
         <h2 className="modal-title" style={{ fontSize: '1.9rem' }}>{post.title}</h2>
 
-        <div className="blog-modal-content" style={{ marginTop: 24, lineHeight: 1.8, color: 'var(--white)' }}>
+        {/* Top-level PDF attachment, if any */}
+        {post.pdf && (
+          <div style={{ marginTop: 16 }}>
+            <a
+              href={post.pdf}
+              className="btn btn-primary btn-small"
+              target="_blank"
+              rel="noopener noreferrer"
+              download
+            >
+              📄 Download PDF
+            </a>
+          </div>
+        )}
+
+        <div
+          className="blog-modal-content"
+          style={{ marginTop: 24, lineHeight: 1.8, color: 'var(--white)' }}
+        >
           {renderMarkdown(post.content)}
         </div>
       </div>

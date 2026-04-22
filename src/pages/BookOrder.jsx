@@ -4,8 +4,14 @@ import { useUser } from '@clerk/clerk-react';
 import { useSupabase } from '../hooks/useSupabase.js';
 import { findProduct } from '../data/products.js';
 import { useToast } from '../lib/toast.jsx';
-import { isValidPincode, isValidWhatsApp, calculateEta, formatShipDate } from '../lib/utils.js';
+import { isValidPincode, calculateEta, formatShipDate } from '../lib/utils.js';
 import Footer from '../components/Footer.jsx';
+
+// --- Local phone validators ---
+// Country code: "+" followed by 1-3 digits
+const isValidCountryCode = (cc) => /^\+\d{1,3}$/.test(cc);
+// Mobile: exactly 10 digits (India format)
+const isValidMobile = (n) => /^\d{10}$/.test(n);
 
 export default function BookOrder() {
   const { productId } = useParams();
@@ -18,7 +24,8 @@ export default function BookOrder() {
 
   const [form, setForm] = useState({
     customer_name: '',
-    whatsapp_number: '',
+    country_code: '+91',
+    mobile_number: '',
     address: '',
     pincode: '',
   });
@@ -66,15 +73,34 @@ export default function BookOrder() {
     return () => { cancelled = true; };
   }, [supabase, product, navigate]);
 
+  // Generic field update (clears field-specific error)
   const update = (field) => (e) => {
     setForm((f) => ({ ...f, [field]: e.target.value }));
     setErrors((err) => ({ ...err, [field]: null }));
   };
 
+  // Special update for mobile — strip non-digits, cap at 10
+  const updateMobile = (e) => {
+    const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
+    setForm((f) => ({ ...f, mobile_number: digits }));
+    setErrors((err) => ({ ...err, mobile_number: null }));
+  };
+
+  // Special update for country code — keep "+" at start, digits after
+  const updateCountryCode = (e) => {
+    let val = e.target.value;
+    if (!val.startsWith('+')) val = '+' + val.replace(/\D/g, '');
+    // Keep "+" and up to 3 digits
+    val = '+' + val.slice(1).replace(/\D/g, '').slice(0, 3);
+    setForm((f) => ({ ...f, country_code: val }));
+    setErrors((err) => ({ ...err, country_code: null }));
+  };
+
   const validate = () => {
     const errs = {};
     if (!form.customer_name.trim()) errs.customer_name = 'Name is required';
-    if (!isValidWhatsApp(form.whatsapp_number)) errs.whatsapp_number = 'Enter a valid number with country code';
+    if (!isValidCountryCode(form.country_code)) errs.country_code = 'Invalid country code';
+    if (!isValidMobile(form.mobile_number)) errs.mobile_number = 'Enter a 10-digit mobile number';
     if (!form.address.trim() || form.address.trim().length < 10) errs.address = 'Please provide a full address';
     if (!isValidPincode(form.pincode)) errs.pincode = 'Pincode must be 6 digits';
     setErrors(errs);
@@ -85,20 +111,21 @@ export default function BookOrder() {
     e.preventDefault();
     if (!validate() || !supabase) return;
 
+    // Combine country code (digits only) + mobile
+    const fullNumber = form.country_code.replace(/\D/g, '') + form.mobile_number;
+
     setSubmitting(true);
-    // RPC call — atomic on the server, prevents race conditions
     const { data, error } = await supabase.rpc('create_order', {
       p_product_id: product.id,
       p_product_name: product.name,
       p_customer_name: form.customer_name.trim(),
-      p_whatsapp_number: form.whatsapp_number.replace(/\D/g, ''),
+      p_whatsapp_number: fullNumber,
       p_address: form.address.trim(),
       p_pincode: form.pincode.trim(),
     });
     setSubmitting(false);
 
     if (error) {
-      // Handle the server-side "active order exists" error specifically
       if (error.message?.includes('active_order_exists')) {
         setBlockedMessage('You already have an active order. Please wait for it to ship before placing another.');
       } else {
@@ -214,16 +241,34 @@ export default function BookOrder() {
 
             <div className="form-group">
               <label className="form-label">WhatsApp Number</label>
-              <input
-                className="form-input"
-                type="tel"
-                value={form.whatsapp_number}
-                onChange={update('whatsapp_number')}
-                placeholder="919876543210 (with country code)"
-                autoComplete="tel"
-              />
-              <div className="form-help">Include country code. Digits only — no + or spaces.</div>
-              {errors.whatsapp_number && <div className="form-error">{errors.whatsapp_number}</div>}
+              <div style={{ display: 'flex', gap: 10 }}>
+                <input
+                  className="form-input"
+                  style={{ width: 90, flexShrink: 0, textAlign: 'center' }}
+                  type="text"
+                  value={form.country_code}
+                  onChange={updateCountryCode}
+                  placeholder="+91"
+                  maxLength={4}
+                  autoComplete="tel-country-code"
+                  aria-label="Country code"
+                />
+                <input
+                  className="form-input"
+                  style={{ flex: 1 }}
+                  type="tel"
+                  value={form.mobile_number}
+                  onChange={updateMobile}
+                  placeholder="9876543210"
+                  maxLength={10}
+                  inputMode="numeric"
+                  autoComplete="tel-national"
+                  aria-label="Mobile number"
+                />
+              </div>
+              <div className="form-help">10-digit mobile number (India, +91 pre-filled)</div>
+              {errors.country_code && <div className="form-error">{errors.country_code}</div>}
+              {errors.mobile_number && <div className="form-error">{errors.mobile_number}</div>}
             </div>
 
             <div className="form-group">
@@ -248,6 +293,7 @@ export default function BookOrder() {
                 placeholder="6-digit postal code"
                 autoComplete="postal-code"
                 maxLength={6}
+                inputMode="numeric"
               />
               {errors.pincode && <div className="form-error">{errors.pincode}</div>}
             </div>
