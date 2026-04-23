@@ -128,16 +128,34 @@ export const PRODUCTS = [
     maxActivePerUser: 2,  // ← bump this to 2, 3, etc when you scale production
     description:
       "Custom-designed rear mudflap for the Triumph Speed 400, Scrambler 400x, Speed T4, Thruxton 400 and Scrambler 400xc, printed in flexible TPU95A. Easy installation.",
-    price: "₹450 – 490",
+    price: "₹600 - 640",
     images: [
+      "/assets/mudflaps/20260308_103458.jpg",
+      "/assets/mudflaps/20260423_133002.jpeg",
+      "/assets/mudflaps/20260423_133010.jpeg",
+      "/assets/mudflaps/20260308_103515.jpg",
+      "/assets/mudflaps/20260308_103532.jpg",
+      "/assets/mudflaps/20260308_103608.jpg",
+      "/assets/mudflaps/20260308_103651.jpg",      
+
+      "/assets/mudflaps/20260125_145727.jpg",
+      "/assets/mudflaps/20260125_145730.jpg",
+      "/assets/mudflaps/20260125_145734.jpg",
+      "/assets/mudflaps/20260125_145738.jpg",
+      "/assets/mudflaps/20260125_145741.jpg",
+      "/assets/mudflaps/20260123_192234.jpg",
+      "/assets/mudflaps/20260123_192240.jpg",
+      "/assets/mudflaps/20260123_192250.jpg",
+
+      "/assets/mudflaps/20260129_155145.jpg",
+      "/assets/mudflaps/20260130_074730.jpg",
+      "/assets/mudflaps/20260130_074733.jpg",
+      "/assets/mudflaps/20260131_084233.jpg",
       "/assets/mudflaps/20260308_103458.jpg",
       "/assets/mudflaps/20260308_103515.jpg",
       "/assets/mudflaps/20260308_103532.jpg",
       "/assets/mudflaps/20260308_103608.jpg",
       "/assets/mudflaps/20260308_103651.jpg",
-      "/assets/mudflaps/20260331_100429.jpg",
-      "/assets/mudflaps/20260331_100438.jpg",
-      "/assets/mudflaps/20260403_200923.jpg",
     ],
     openSource: {
       github: null,
@@ -149,11 +167,8 @@ export const PRODUCTS = [
         label: "Vehicle Model",
         required: true,
         options: [
-          { value: "Triumph Speed 400" },
-          { value: "Triumph Scrambler 400x" },
-          { value: "Triumph Speed T4" },
-          { value: "Triumph Thruxton 400" },
-          { value: "Triumph Scrambler 400xc" },
+          { value: "Triumph Speed 400, T4, Thruxton 400" },
+          { value: "Triumph Scrambler 400x, 400xc" },
         ],
       },
       {
@@ -163,9 +178,9 @@ export const PRODUCTS = [
         options: [
           // Drop design photos into public/assets/mudflaps/designs/
           // Paths MUST start with "/"
-          { value: "Classic",  image: "/assets/mudflaps/designs/20260123_192234.jpg"  },
-          { value: "Dragon",   image: "/assets/mudflaps/designs/20260123_192234.jpg"   },
-          { value: "Minimal",  image: "/assets/mudflaps/designs/20260123_192234.jpg"  },
+          { value: "Classic",  image: "/assets/mudflaps/20260308_103458.jpg"  },
+          { value: "Triangle logo",   image: "/assets/mudflaps/20260423_133002.jpeg"   },
+          { value: "Vehicle name",  image: "/assets/mudflaps/20260423_133010.jpeg"  },
         ],
       },
     ],
@@ -187,7 +202,7 @@ export const PRODUCTS = [
       },
     ],
     notes: [
-      { type: "info",    text: "Scrambler variants — ₹490 · Speed variants — ₹450 · Advance — ₹200" },
+      { type: "info",    text: "Scrambler variants — ₹640 · Speed variants — ₹600 · Advance — ₹200" },
       { type: "info",    text: "Open source for personal use only. Files on Cults3D." },
       { type: "info",    text: "Delivery charges calculated at time of delivery." },
       { type: "info",    text: "Based in Chennai, Tamilnadu — collect on site and I'll install it for free. Contact me on WhatsApp." },
