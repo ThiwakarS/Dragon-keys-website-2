@@ -142,7 +142,9 @@ export const PRODUCTS = [
       "/assets/mudflaps/20260308_103515.jpg",
       "/assets/mudflaps/20260308_103532.jpg",
       "/assets/mudflaps/20260308_103608.jpg",
-      "/assets/mudflaps/20260308_103651.jpg",      
+      "/assets/mudflaps/20260308_103651.jpg",  
+      
+      "youtube:GCa6L8qT5BM",
 
       "/assets/mudflaps/20260125_145727.jpg",
       "/assets/mudflaps/20260125_145730.jpg",
@@ -157,11 +159,6 @@ export const PRODUCTS = [
       "/assets/mudflaps/20260130_074730.jpg",
       "/assets/mudflaps/20260130_074733.jpg",
       "/assets/mudflaps/20260131_084233.jpg",
-      "/assets/mudflaps/20260308_103458.jpg",
-      "/assets/mudflaps/20260308_103515.jpg",
-      "/assets/mudflaps/20260308_103532.jpg",
-      "/assets/mudflaps/20260308_103608.jpg",
-      "/assets/mudflaps/20260308_103651.jpg",
     ],
     openSource: {
       github: null,
