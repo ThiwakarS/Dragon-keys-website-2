@@ -3,14 +3,15 @@ import { PRODUCTS } from '../data/products.js';
 import { POSTS } from '../data/posts.js';
 import ProductCard from '../components/ProductCard.jsx';
 import ProductModal from '../components/ProductModal.jsx';
-import { BlogCard, BlogModal } from '../components/Blog.jsx';
+import { BlogModal } from '../components/Blog.jsx';
+import BlogCarousel from '../components/BlogCarousel.jsx';
+import NowPrinting from '../components/NowPrinting.jsx';
 import Footer from '../components/Footer.jsx';
 
 export default function Home() {
   const [openProduct, setOpenProduct] = useState(null);
   const [openPost, setOpenPost] = useState(null);
 
-  // Handle hash scroll on mount (e.g. /#products)
   useEffect(() => {
     if (window.location.hash) {
       const id = window.location.hash.slice(1);
@@ -45,6 +46,9 @@ export default function Home() {
           <div className="scroll-line" />
         </div>
       </section>
+
+      {/* NOW PRINTING — renders nothing if no current printing set */}
+      <NowPrinting />
 
       {/* ABOUT */}
       <section className="about" id="about">
@@ -95,7 +99,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* OSS NOTICE */}
+      {/* OSS */}
       <section className="oss-section">
         <div className="container">
           <div className="oss-inner">
@@ -107,14 +111,14 @@ export default function Home() {
             <div className="oss-text">
               <h3>Open Source — <span className="oss-personal-tag">Personal Use Only</span></h3>
               <p>
-                Select designs are shared on GitHub and Cults3D. You're welcome to download, build, and modify them <strong>for your own personal use</strong>. <strong>Commercial use is strictly not permitted</strong> — the designs are not patented and selling them or using them for commercial production without permission is a violation of the license.
+                Select designs are shared on GitHub and Cults3D. You're welcome to download, build, and modify them <strong>for your own personal use</strong>. <strong>Commercial use is strictly not permitted</strong>.
               </p>
             </div>
           </div>
         </div>
       </section>
 
-      {/* BLOG */}
+      {/* BLOG CAROUSEL */}
       <section className="blog" id="blog">
         <div className="container">
           <div className="section-header">
@@ -122,11 +126,7 @@ export default function Home() {
             <h2 className="section-title">Thoughts from <span className="accent">the bench.</span></h2>
             <p className="section-sub">Build logs, design notes, and things I figured out the hard way.</p>
           </div>
-          <div className="blog-grid">
-            {POSTS.map((p) => (
-              <BlogCard key={p.id} post={p} onOpen={setOpenPost} />
-            ))}
-          </div>
+          <BlogCarousel posts={POSTS} onOpen={setOpenPost} />
         </div>
       </section>
 

@@ -1,0 +1,7 @@
+right now the .env.local is in gitignore, do i need to add the secrets separately in cloudfare pages? this will always be a github provate repo, what is the safest way to do it?
+
+also as mentioned, i will be using 2 email, orders and support email. the support email is shown at the bottom of the page, but the env file doesnt even contain the orders email id section. the orders email id section will be shown in the keychain section, fulfilment = email also routes to the support email. i want to be a different email. orders should display the order email id, and support email should display the support email id. adding this in the env file would be great.
+
+also i want to restart the ordering numbers from 1, cause the testing is over, and i want to put it into production.
+
+give me files which i should change, edit and replace do not give zip file.

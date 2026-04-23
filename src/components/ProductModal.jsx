@@ -2,6 +2,10 @@ import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '../lib/toast.jsx';
 
+// Email routing:
+//   - "queue" products go through the booking form (no email needed)
+//   - "email" products (keychain, build service) go to ORDERS inbox
+const ORDERS_EMAIL  = import.meta.env.VITE_ORDERS_EMAIL  || 'orders@dragonkeys.dev';
 const SUPPORT_EMAIL = import.meta.env.VITE_SUPPORT_EMAIL || 'support@dragonkeys.dev';
 
 const NOTE_STYLES = {
@@ -28,7 +32,6 @@ function detectMediaType(src) {
 
 function MediaView({ src, alt }) {
   const type = detectMediaType(src);
-
   if (type === 'youtube') {
     const id = getYouTubeId(src);
     return (
@@ -42,9 +45,7 @@ function MediaView({ src, alt }) {
       </div>
     );
   }
-  if (type === 'video') {
-    return <video src={src} controls preload="metadata" key={src} />;
-  }
+  if (type === 'video') return <video src={src} controls preload="metadata" key={src} />;
   return <img src={src} alt={alt} />;
 }
 
@@ -83,7 +84,6 @@ function Gallery({ media, alt }) {
   const prev = useCallback(() => setIndex((i) => (i - 1 + total) % total), [total]);
   const next = useCallback(() => setIndex((i) => (i + 1) % total), [total]);
 
-  // Keyboard arrow nav
   useEffect(() => {
     if (total <= 1) return;
     const handler = (e) => {
@@ -102,18 +102,8 @@ function Gallery({ media, alt }) {
         <MediaView src={media[index]} alt={alt} />
         {total > 1 && (
           <>
-            <button
-              className="gallery-nav gallery-prev"
-              onClick={prev}
-              aria-label="Previous"
-              type="button"
-            >←</button>
-            <button
-              className="gallery-nav gallery-next"
-              onClick={next}
-              aria-label="Next"
-              type="button"
-            >→</button>
+            <button className="gallery-nav gallery-prev" onClick={prev} aria-label="Previous" type="button">←</button>
+            <button className="gallery-nav gallery-next" onClick={next} aria-label="Next" type="button">→</button>
             <div className="gallery-counter">{index + 1} / {total}</div>
           </>
         )}
@@ -150,20 +140,23 @@ export default function ProductModal({ product, onClose }) {
   const media = (product.images || []).filter(Boolean);
   const hasOss = product.openSource?.github || product.openSource?.cults3d;
 
+  // Always route email-fulfillment CTAs to the ORDERS inbox
+  const contactEmail = ORDERS_EMAIL;
+
   const handleEmailClick = () => {
-    const subject = encodeURIComponent(`Enquiry: ${product.name}`);
+    const subject = encodeURIComponent(`Order enquiry: ${product.name}`);
     const body = encodeURIComponent(
-      `Hi,\n\nI'm interested in the ${product.name}.\n\nDetails / requirements:\n\n\nThanks,\n`
+      `Hi,\n\nI'd like to place an order for the ${product.name}.\n\nDetails / requirements:\n\n\nThanks,\n`
     );
-    window.location.href = `mailto:${SUPPORT_EMAIL}?subject=${subject}&body=${body}`;
+    window.location.href = `mailto:${contactEmail}?subject=${subject}&body=${body}`;
   };
 
   const handleCopyEmail = async () => {
     try {
-      await navigator.clipboard.writeText(SUPPORT_EMAIL);
-      toast.show(`Copied to clipboard: ${SUPPORT_EMAIL}`, 'success');
+      await navigator.clipboard.writeText(contactEmail);
+      toast.show(`Copied to clipboard: ${contactEmail}`, 'success');
     } catch {
-      toast.show(`Couldn't copy. Email us at: ${SUPPORT_EMAIL}`, 'error', 6000);
+      toast.show(`Couldn't copy. Email us at: ${contactEmail}`, 'error', 6000);
     }
   };
 
@@ -184,7 +177,6 @@ export default function ProductModal({ product, onClose }) {
         <p className="modal-desc">{product.description}</p>
         <div className="product-price" style={{ marginBottom: 20 }}>{product.price}</div>
 
-        {/* Specs — grouped */}
         {product.specs?.length > 0 && (
           <div style={{ marginBottom: 20 }}>
             {product.specs.map((group, gi) => (
@@ -218,7 +210,6 @@ export default function ProductModal({ product, onClose }) {
           </div>
         )}
 
-        {/* Notes */}
         {product.notes?.length > 0 && (
           <div style={{ marginBottom: 20, display: 'flex', flexDirection: 'column', gap: 8 }}>
             {product.notes.map((note, i) => {
@@ -245,7 +236,6 @@ export default function ProductModal({ product, onClose }) {
           </div>
         )}
 
-        {/* OSS links */}
         {hasOss && (
           <div style={{
             marginBottom: 20,
@@ -283,7 +273,6 @@ export default function ProductModal({ product, onClose }) {
           </div>
         )}
 
-        {/* CTA */}
         <div className="flex-row">
           {product.fulfillment === 'queue' ? (
             <button className="btn btn-primary" onClick={handleOrder}>
@@ -292,13 +281,13 @@ export default function ProductModal({ product, onClose }) {
           ) : (
             <>
               <button className="btn btn-email" onClick={handleEmailClick}>
-                Email us
+                Email to order
               </button>
               <button className="btn btn-ghost" onClick={handleCopyEmail}>
                 Copy email
               </button>
               <span style={{ fontSize: '0.85rem', color: 'var(--muted)', alignSelf: 'center' }}>
-                {SUPPORT_EMAIL}
+                {contactEmail}
               </span>
             </>
           )}

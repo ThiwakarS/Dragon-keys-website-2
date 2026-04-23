@@ -7,11 +7,8 @@ import { useToast } from '../lib/toast.jsx';
 import { isValidPincode, calculateEta, formatShipDate } from '../lib/utils.js';
 import Footer from '../components/Footer.jsx';
 
-// --- Local phone validators ---
-// Country code: "+" followed by 1-3 digits
 const isValidCountryCode = (cc) => /^\+\d{1,3}$/.test(cc);
-// Mobile: exactly 10 digits (India format)
-const isValidMobile = (n) => /^\d{10}$/.test(n);
+const isValidMobile      = (n)  => /^\d{10}$/.test(n);
 
 export default function BookOrder() {
   const { productId } = useParams();
@@ -21,6 +18,8 @@ export default function BookOrder() {
   const toast = useToast();
 
   const product = findProduct(productId);
+  const maxActive  = product?.maxActivePerUser ?? 1;
+  const categories = product?.optionCategories || [];
 
   const [form, setForm] = useState({
     customer_name: '',
@@ -29,35 +28,31 @@ export default function BookOrder() {
     address: '',
     pincode: '',
   });
+  const [selectedOptions, setSelectedOptions] = useState({});
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [checking, setChecking] = useState(true);
   const [blockedMessage, setBlockedMessage] = useState('');
   const [result, setResult] = useState(null);
 
-  // Prefill name from Clerk profile
   useEffect(() => {
     if (user?.fullName && !form.customer_name) {
       setForm((f) => ({ ...f, customer_name: user.fullName }));
     }
   }, [user]);
 
-  // Check if product exists and if user already has an active order
   useEffect(() => {
-    if (!product) {
-      navigate('/404', { replace: true });
-      return;
-    }
-    if (product.fulfillment !== 'queue') {
-      navigate('/', { replace: true });
-      return;
-    }
+    if (!product) { navigate('/404', { replace: true }); return; }
+    if (product.fulfillment !== 'queue') { navigate('/', { replace: true }); return; }
     if (!supabase) return;
 
     let cancelled = false;
     (async () => {
       setChecking(true);
-      const { data, error } = await supabase.rpc('check_can_book');
+      const { data, error } = await supabase.rpc('check_can_book_for_product', {
+        p_product_id: product.id,
+        p_max_active: maxActive,
+      });
       if (cancelled) return;
       if (error) {
         toast.show('Could not verify booking eligibility. Try again.', 'error');
@@ -65,44 +60,50 @@ export default function BookOrder() {
         return;
       }
       if (data && data.length > 0 && !data[0].can_book) {
-        setBlockedMessage(data[0].reason || 'You already have an active order.');
+        setBlockedMessage(data[0].reason || 'Limit reached.');
       }
       setChecking(false);
     })();
-
     return () => { cancelled = true; };
-  }, [supabase, product, navigate]);
+  }, [supabase, product, maxActive, navigate]);
 
-  // Generic field update (clears field-specific error)
   const update = (field) => (e) => {
     setForm((f) => ({ ...f, [field]: e.target.value }));
     setErrors((err) => ({ ...err, [field]: null }));
   };
 
-  // Special update for mobile — strip non-digits, cap at 10
   const updateMobile = (e) => {
     const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
     setForm((f) => ({ ...f, mobile_number: digits }));
     setErrors((err) => ({ ...err, mobile_number: null }));
   };
 
-  // Special update for country code — keep "+" at start, digits after
   const updateCountryCode = (e) => {
     let val = e.target.value;
     if (!val.startsWith('+')) val = '+' + val.replace(/\D/g, '');
-    // Keep "+" and up to 3 digits
     val = '+' + val.slice(1).replace(/\D/g, '').slice(0, 3);
     setForm((f) => ({ ...f, country_code: val }));
     setErrors((err) => ({ ...err, country_code: null }));
+  };
+
+  const selectOption = (categoryKey, value) => {
+    setSelectedOptions((prev) => ({ ...prev, [categoryKey]: value }));
+    setErrors((err) => ({ ...err, [`opt_${categoryKey}`]: null }));
   };
 
   const validate = () => {
     const errs = {};
     if (!form.customer_name.trim()) errs.customer_name = 'Name is required';
     if (!isValidCountryCode(form.country_code)) errs.country_code = 'Invalid country code';
-    if (!isValidMobile(form.mobile_number)) errs.mobile_number = 'Enter a 10-digit mobile number';
+    if (!isValidMobile(form.mobile_number))     errs.mobile_number = 'Enter a 10-digit mobile number';
     if (!form.address.trim() || form.address.trim().length < 10) errs.address = 'Please provide a full address';
     if (!isValidPincode(form.pincode)) errs.pincode = 'Pincode must be 6 digits';
+
+    for (const cat of categories) {
+      if (cat.required && !selectedOptions[cat.key]) {
+        errs[`opt_${cat.key}`] = `Please select a ${cat.label.toLowerCase()}`;
+      }
+    }
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -111,7 +112,6 @@ export default function BookOrder() {
     e.preventDefault();
     if (!validate() || !supabase) return;
 
-    // Combine country code (digits only) + mobile
     const fullNumber = form.country_code.replace(/\D/g, '') + form.mobile_number;
 
     setSubmitting(true);
@@ -122,14 +122,16 @@ export default function BookOrder() {
       p_whatsapp_number: fullNumber,
       p_address: form.address.trim(),
       p_pincode: form.pincode.trim(),
+      p_selected_options: selectedOptions,
+      p_max_active: maxActive,
     });
     setSubmitting(false);
 
     if (error) {
       if (error.message?.includes('active_order_exists')) {
-        setBlockedMessage('You already have an active order. Please wait for it to ship before placing another.');
+        setBlockedMessage(`You've hit the limit of ${maxActive} active order(s) for this product.`);
       } else {
-        toast.show(error.message || 'Something went wrong. Please try again.', 'error');
+        toast.show(error.message || 'Something went wrong.', 'error');
       }
       return;
     }
@@ -141,7 +143,6 @@ export default function BookOrder() {
 
   if (!product) return null;
 
-  // Blocked state
   if (!checking && blockedMessage) {
     return (
       <div className="page">
@@ -156,16 +157,13 @@ export default function BookOrder() {
     );
   }
 
-  // Success state
   if (result) {
     const eta = calculateEta(product.id, result.position_in_product_queue || 1);
     return (
       <div className="page">
         <div className="page-inner">
           <h1 className="page-title"><span className="accent">Order placed.</span></h1>
-          <p className="page-subtitle">
-            I'll message you on WhatsApp shortly to confirm the deposit. Save this page for your records.
-          </p>
+          <p className="page-subtitle">I'll message you on WhatsApp shortly to confirm the deposit.</p>
 
           <div className="order-card">
             <div className="order-card-head">
@@ -196,7 +194,6 @@ export default function BookOrder() {
 
             <div className="order-eta">
               Estimated to ship in <strong>~{eta.days} days</strong> (around <strong>{formatShipDate(eta.shipDate)}</strong>).
-              This is an estimate based on current queue load.
             </div>
           </div>
 
@@ -215,9 +212,7 @@ export default function BookOrder() {
       <div className="page-inner">
         <Link to="/" className="btn btn-ghost btn-small" style={{ marginBottom: 24 }}>← Back</Link>
         <h1 className="page-title">Book your <span className="accent">{product.name}</span></h1>
-        <p className="page-subtitle">
-          Fill this in and I'll message you on WhatsApp to confirm the deposit.
-        </p>
+        <p className="page-subtitle">Fill this in and I'll message you on WhatsApp to confirm the deposit.</p>
 
         {checking ? (
           <div className="loading-center">
@@ -226,6 +221,46 @@ export default function BookOrder() {
           </div>
         ) : (
           <form onSubmit={handleSubmit} noValidate>
+
+            {categories.map((cat) => (
+              <div className="form-group" key={cat.key}>
+                <label className="form-label">
+                  {cat.label}
+                  {!cat.required && (
+                    <span style={{ textTransform: 'none', color: 'var(--muted)', fontWeight: 400, marginLeft: 6 }}>
+                      (optional)
+                    </span>
+                  )}
+                </label>
+                <div className="option-grid">
+                  {cat.options.map((opt) => {
+                    const active = selectedOptions[cat.key] === opt.value;
+                    return (
+                      <button
+                        type="button"
+                        key={opt.value}
+                        className={`option-card ${active ? 'active' : ''}`}
+                        onClick={() => selectOption(cat.key, opt.value)}
+                      >
+                        {opt.image ? (
+                          <div className="option-card-img">
+                            <img src={opt.image} alt={opt.value} loading="lazy" />
+                          </div>
+                        ) : (
+                          <div className="option-card-img option-card-noimg">
+                            <span>{opt.value.slice(0, 2).toUpperCase()}</span>
+                          </div>
+                        )}
+                        <span className="option-card-label">{opt.value}</span>
+                        {active && <span className="option-card-check">✓</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+                {errors[`opt_${cat.key}`] && <div className="form-error">{errors[`opt_${cat.key}`]}</div>}
+              </div>
+            ))}
+
             <div className="form-group">
               <label className="form-label">Your Name</label>
               <input

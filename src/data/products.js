@@ -1,6 +1,7 @@
 /* =============================================
    DRAGON KEYS — products.js
-   ✏️  ADD/EDIT PRODUCTS HERE.
+
+      ✏️  ADD/EDIT PRODUCTS HERE.
 
    REQUIRED fields for every product:
      id, name, category, fulfillment, description, price, images, openSource
@@ -16,6 +17,17 @@
    specs: array of { label, rows: [{key, value}] }
    notes: array of { type: "info"|"caution"|"tip", text }
    images: paths from /public folder, e.g. "assets/mudflaps/photo.jpg"
+
+   IMPORTANT about image paths:
+     - Images live in /public (e.g. public/assets/mudflaps/foo.jpg)
+     - Paths in this file should START WITH "/assets/..." — with a leading slash.
+     - WITHOUT the slash, browsers resolve relative to the current URL,
+       so "assets/foo.jpg" on the /order/mudflap page becomes
+       /order/assets/foo.jpg → 404.
+     - Product card images happen to work either way because the grid
+       is rendered on "/" — but option images are rendered on "/order/:id"
+       and will break without the slash.
+     - Safe rule: ALWAYS start image paths with "/".
 ============================================= */
 
 export const PRODUCTS = [
@@ -25,15 +37,15 @@ export const PRODUCTS = [
     category: "Keyboard",
     fulfillment: "queue",
     throughputPerDay: 0.5,
+    maxActivePerUser: 1,
     description:
       "A handcrafted 67-key split mechanical keyboard inspired by the ROG Falcata. Features RP2040 Zero with QMK/VIAL support, three Deej audio sliders, a rotary encoder, and an ergonomic 3D-printed design with TRRS interconnect and USB-C input.",
     price: "₹5,200",
     images: [
-      // Uncomment once photos are in public/assets/keyboards/dragonfly67/
-      "assets/keyboards/dragonfly67/_dsc8664_edited_lrc.png",
-      "assets/keyboards/dragonfly67/_dsc8665_edited_lrc.png",
-      "assets/keyboards/dragonfly67/_dsc8666_edited_lrc.png",
-      "assets/keyboards/dragonfly67/_dsc8667_edited_lrc.png",
+      "/assets/keyboards/dragonfly67/_dsc8664_edited_lrc.png",
+      "/assets/keyboards/dragonfly67/_dsc8665_edited_lrc.png",
+      "/assets/keyboards/dragonfly67/_dsc8666_edited_lrc.png",
+      "/assets/keyboards/dragonfly67/_dsc8667_edited_lrc.png",
     ],
     openSource: {
       github: "https://github.com/ThiwakarS/Dragon-Keys-3d-model-files",
@@ -84,10 +96,10 @@ export const PRODUCTS = [
       "Transform your vision into a tangible accessory with our custom-designed, 3D-printed keychains. Precision engineering with personalized flair — high-quality gifts tailored to your style.",
     price: "₹40 onwards",
     images: [
-      "assets/keychains/20250912_170251.jpg",
-      "assets/keychains/20250927_190548.jpg",
-      "assets/keychains/20250927_180329.jpg",
-      "assets/keychains/20250820_220629.jpg",
+      "/assets/keychains/20250912_170251.jpg",
+      "/assets/keychains/20250927_190548.jpg",
+      "/assets/keychains/20250927_180329.jpg",
+      "/assets/keychains/20250820_220629.jpg",
     ],
     openSource: { github: null, cults3d: null },
     specs: [
@@ -113,35 +125,50 @@ export const PRODUCTS = [
     category: "3D Printed",
     fulfillment: "queue",
     throughputPerDay: 4,
+    maxActivePerUser: 2,  // ← bump this to 2, 3, etc when you scale production
     description:
       "Custom-designed rear mudflap for the Triumph Speed 400, Scrambler 400x, Speed T4, Thruxton 400 and Scrambler 400xc, printed in flexible TPU95A. Easy installation.",
     price: "₹450 – 490",
     images: [
-      // Uncomment once photos are in public/assets/mudflaps/
-      "assets/mudflaps/20260308_103458.jpg",
-      "assets/mudflaps/20260308_103515.jpg",
-      "assets/mudflaps/20260308_103532.jpg",
-      "assets/mudflaps/20260308_103608.jpg",
-      "assets/mudflaps/20260308_103651.jpg",
-      "assets/mudflaps/20260331_100429.jpg",
-      "assets/mudflaps/20260331_100438.jpg",
-      "assets/mudflaps/20260403_200923.jpg",
-      "assets/mudflaps/20260308_103652.jpg",
-      "assets/mudflaps/20260123_192234.jpg",
-      "assets/mudflaps/20260123_192240.jpg",
-      "assets/mudflaps/20260123_192250.jpg",
-      "assets/mudflaps/20260125_145727.jpg",
-      "assets/mudflaps/20260125_145730.jpg",
-      "assets/mudflaps/20260125_145734.jpg",
-      "assets/mudflaps/20260127_145813.jpg",
-      "assets/mudflaps/20260129_155141.jpg",
-      "assets/mudflaps/20260130_074727.jpg",
-      "assets/mudflaps/20260131_084233.jpg",
+      "/assets/mudflaps/20260308_103458.jpg",
+      "/assets/mudflaps/20260308_103515.jpg",
+      "/assets/mudflaps/20260308_103532.jpg",
+      "/assets/mudflaps/20260308_103608.jpg",
+      "/assets/mudflaps/20260308_103651.jpg",
+      "/assets/mudflaps/20260331_100429.jpg",
+      "/assets/mudflaps/20260331_100438.jpg",
+      "/assets/mudflaps/20260403_200923.jpg",
     ],
     openSource: {
       github: null,
       cults3d: "https://cults3d.com/en/users/thiwakar/3d-models",
     },
+    optionCategories: [
+      {
+        key: "vehicle",
+        label: "Vehicle Model",
+        required: true,
+        options: [
+          { value: "Triumph Speed 400" },
+          { value: "Triumph Scrambler 400x" },
+          { value: "Triumph Speed T4" },
+          { value: "Triumph Thruxton 400" },
+          { value: "Triumph Scrambler 400xc" },
+        ],
+      },
+      {
+        key: "design",
+        label: "Design",
+        required: true,
+        options: [
+          // Drop design photos into public/assets/mudflaps/designs/
+          // Paths MUST start with "/"
+          { value: "Classic",  image: "/assets/mudflaps/designs/20260123_192234.jpg"  },
+          { value: "Dragon",   image: "/assets/mudflaps/designs/20260123_192234.jpg"   },
+          { value: "Minimal",  image: "/assets/mudflaps/designs/20260123_192234.jpg"  },
+        ],
+      },
+    ],
     specs: [
       {
         label: "Material & Print",

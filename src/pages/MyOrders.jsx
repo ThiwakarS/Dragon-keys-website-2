@@ -14,11 +14,9 @@ export default function MyOrders() {
 
   useEffect(() => {
     if (!supabase) return;
-
     let cancelled = false;
 
     const fetchOrders = async () => {
-      // This view returns the user's orders WITH computed queue position
       const { data, error } = await supabase
         .from('my_orders_with_position')
         .select('*')
@@ -36,17 +34,9 @@ export default function MyOrders() {
 
     fetchOrders();
 
-    // Realtime: subscribe to changes on the user's own orders
     const channel = supabase
       .channel('my-orders-changes')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'orders' },
-        () => {
-          // On any change, refetch (RLS ensures we only see our own)
-          fetchOrders();
-        }
-      )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => fetchOrders())
       .subscribe();
 
     return () => {
@@ -74,9 +64,11 @@ export default function MyOrders() {
           </div>
         ) : (
           orders.map((o) => {
-            const eta = o.status === 'shipped' || o.status === 'cancelled'
-              ? null
-              : calculateEta(o.product_id, o.position_in_product_queue || 1);
+            const active = o.status !== 'shipped' && o.status !== 'cancelled';
+            const eta = active ? calculateEta(o.product_id, o.position_in_product_queue || 1) : null;
+            const opts = o.selected_options || {};
+            const hasOpts = Object.keys(opts).length > 0;
+
             return (
               <div key={o.id} className="order-card">
                 <div className="order-card-head">
@@ -97,8 +89,24 @@ export default function MyOrders() {
                   </div>
                 </div>
 
+                {hasOpts && (
+                  <div style={{ marginTop: 12, padding: 12, background: 'var(--card-2)', borderRadius: 8, border: '1px solid var(--border)' }}>
+                    <div style={{ fontSize: '0.72rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted)', fontFamily: 'var(--font-display)', marginBottom: 6 }}>
+                      Your selections
+                    </div>
+                    <div style={{ display: 'grid', gap: 4, fontSize: '0.9rem' }}>
+                      {Object.entries(opts).map(([k, v]) => (
+                        <div key={k} style={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <span style={{ color: 'var(--muted)', textTransform: 'capitalize' }}>{k}</span>
+                          <span>{v}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <div className="order-meta">
-                  {o.status !== 'shipped' && o.status !== 'cancelled' && (
+                  {active && (
                     <div className="order-meta-item">
                       <span className="order-meta-label">Position</span>
                       <span className="order-meta-value">
@@ -122,6 +130,16 @@ export default function MyOrders() {
                 {o.status === 'shipped' && (
                   <div className="order-eta">
                     <strong>Shipped!</strong> Thank you for your order.
+                  </div>
+                )}
+                {o.status === 'cancelled' && (
+                  <div className="order-eta" style={{ color: '#f2b84b' }}>
+                    <strong>Cancelled.</strong>
+                    {o.cancellation_reason && (
+                      <>
+                        {' '}Reason: <em>{o.cancellation_reason}</em>
+                      </>
+                    )}
                   </div>
                 )}
               </div>
