@@ -46,6 +46,12 @@ export const PRODUCTS = [
       "/assets/keyboards/dragonfly67/_dsc8665_edited_lrc.png",
       "/assets/keyboards/dragonfly67/_dsc8666_edited_lrc.png",
       "/assets/keyboards/dragonfly67/_dsc8667_edited_lrc.png",
+      "/assets/keyboards/dragonfly67/_dsc8668_edited_lrc.png",
+      "/assets/keyboards/dragonfly67/_dsc8669_edited_lrc.png",
+      "/assets/keyboards/dragonfly67/_dsc8670_edited_lrc.png",
+      "/assets/keyboards/dragonfly67/_dsc8671_edited_lrc.png",
+      "/assets/keyboards/dragonfly67/_dsc8672_edited_lrc.png",
+      "/assets/keyboards/dragonfly67/_dsc8673_edited_lrc.png",
     ],
     openSource: {
       github: "https://github.com/ThiwakarS/Dragon-Keys-3d-model-files",
