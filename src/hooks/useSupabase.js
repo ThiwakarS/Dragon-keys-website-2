@@ -1,21 +1,22 @@
-import { useMemo } from 'react';
+import { useEffect } from 'react';
 import { useSession } from '@clerk/clerk-react';
-import { createClerkSupabaseClient } from '../lib/supabase.js';
-
+import { getSupabaseClient, setActiveClerkSession } from '../lib/supabase.js';
+ 
 /**
- * Hook that returns a Supabase client authenticated via the current Clerk session.
- * Returns `null` while the Clerk session is still loading.
+ * Hook that returns the singleton Supabase client, and keeps its
+ * accessToken callback in sync with the current Clerk session.
  *
- * IMPORTANT: we memoize on session.id (not the session object itself) so the
- * client isn't recreated on every render — which would kill performance and
- * break realtime subscriptions.
+ * CRITICAL: we no longer create a new client per session. That caused
+ * multiple GoTrueClient instances which caused reads to sometimes
+ * fall through as anon role (which couldn't see the user's own orders).
  */
 export function useSupabase() {
   const { session, isLoaded } = useSession();
-
-  return useMemo(() => {
-    if (!isLoaded) return null;
-    return createClerkSupabaseClient(session);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session?.id, isLoaded]);
+ 
+  useEffect(() => {
+    if (isLoaded) setActiveClerkSession(session || null);
+  }, [session, isLoaded]);
+ 
+  if (!isLoaded) return null;
+  return getSupabaseClient();
 }

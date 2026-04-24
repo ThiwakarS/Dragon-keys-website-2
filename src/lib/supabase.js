@@ -15,44 +15,54 @@
    Supabase Dashboard → Authentication → Third Party Auth → Add Clerk
    ============================================= */
 
+/* =============================================
+   Supabase Client — SINGLETON
+   Uses Clerk native third-party auth integration.
+   ============================================= */
+
 import { createClient } from '@supabase/supabase-js';
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_URL      = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-  throw new Error(
-    'Missing Supabase env vars. Check VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env.local'
-  );
+  throw new Error('Missing Supabase env vars.');
 }
 
-/**
- * Creates a Supabase client that authenticates using the current Clerk session.
- * Call this with the `session` object from Clerk's `useSession()` hook.
- *
- * Usage inside a component:
- *   const { session } = useSession();
- *   const supabase = useMemo(() => createClerkSupabaseClient(session), [session]);
- */
-export function createClerkSupabaseClient(session) {
-  return createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    global: {
-      // Supabase calls this before every request to get a fresh token.
-      // Returning null for signed-out users means the anon role is used.
-      fetch: async (url, options = {}) => {
-        const token = session ? await session.getToken() : null;
-        const headers = new Headers(options.headers);
-        if (token) {
-          headers.set('Authorization', `Bearer ${token}`);
-        }
-        return fetch(url, { ...options, headers });
-      },
+// Module-level singleton — survives re-renders and route changes.
+// Crucially this prevents "Multiple GoTrueClient instances" which
+// was silently causing some requests to fall back to anon role.
+let _client = null;
+let _currentSession = null;
+
+export function setActiveClerkSession(session) {
+  _currentSession = session;
+}
+
+export function getSupabaseClient() {
+  if (_client) return _client;
+
+  _client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    // Native third-party auth: Supabase calls this on every request
+    // to get a fresh Clerk token. No JWT templates, no aliases.
+    accessToken: async () => {
+      if (!_currentSession) return null;
+      try {
+        return await _currentSession.getToken();
+      } catch {
+        return null;
+      }
     },
     auth: {
-      // We're not using Supabase's built-in auth — Clerk handles it.
-      persistSession: false,
-      autoRefreshToken: false,
-      detectSessionInUrl: false,
+      persistSession:      false,
+      autoRefreshToken:    false,
+      detectSessionInUrl:  false,
+      storageKey:          'dragonkeys-supabase-auth', // unique key to avoid collision
+    },
+    realtime: {
+      params: { eventsPerSecond: 10 },
     },
   });
+
+  return _client;
 }
