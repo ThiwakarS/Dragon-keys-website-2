@@ -1,10 +1,8 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '../lib/toast.jsx';
+import Reviews from './Reviews.jsx';
 
-// Email routing:
-//   - "queue" products go through the booking form (no email needed)
-//   - "email" products (keychain, build service) go to ORDERS inbox
 const ORDERS_EMAIL  = import.meta.env.VITE_ORDERS_EMAIL  || 'orders@dragonkeys.dev';
 const SUPPORT_EMAIL = import.meta.env.VITE_SUPPORT_EMAIL || 'support@dragonkeys.dev';
 
@@ -13,8 +11,6 @@ const NOTE_STYLES = {
   caution: { border: 'rgba(242,184,75,0.4)',   icon: '⚠',  color: '#f2b84b' },
   tip:     { border: 'rgba(58,180,242,0.35)',  icon: '💡', color: 'var(--blue)' },
 };
-
-/* ---------- Media helpers ---------- */
 
 function getYouTubeId(src) {
   if (!src || typeof src !== 'string') return null;
@@ -52,7 +48,6 @@ function MediaView({ src, alt }) {
 function Thumb({ src, active, onClick }) {
   const type = detectMediaType(src);
   const className = `gallery-thumb ${active ? 'active' : ''}`;
-
   if (type === 'youtube') {
     const id = getYouTubeId(src);
     return (
@@ -119,8 +114,6 @@ function Gallery({ media, alt }) {
   );
 }
 
-/* ---------- Main modal ---------- */
-
 export default function ProductModal({ product, onClose }) {
   const navigate = useNavigate();
   const toast = useToast();
@@ -139,8 +132,6 @@ export default function ProductModal({ product, onClose }) {
 
   const media = (product.images || []).filter(Boolean);
   const hasOss = product.openSource?.github || product.openSource?.cults3d;
-
-  // Always route email-fulfillment CTAs to the ORDERS inbox
   const contactEmail = ORDERS_EMAIL;
 
   const handleEmailClick = () => {
@@ -273,7 +264,7 @@ export default function ProductModal({ product, onClose }) {
           </div>
         )}
 
-        <div className="flex-row">
+        <div className="flex-row" style={{ marginBottom: 24 }}>
           {product.fulfillment === 'queue' ? (
             <button className="btn btn-primary" onClick={handleOrder}>
               Order Now →
@@ -292,6 +283,8 @@ export default function ProductModal({ product, onClose }) {
             </>
           )}
         </div>
+
+        <Reviews productId={product.id} />
       </div>
     </div>
   );

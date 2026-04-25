@@ -6,6 +6,7 @@ import ProductModal from '../components/ProductModal.jsx';
 import { BlogModal } from '../components/Blog.jsx';
 import BlogCarousel from '../components/BlogCarousel.jsx';
 import NowPrinting from '../components/NowPrinting.jsx';
+import NoticesBar from '../components/NoticesBar.jsx';
 import Footer from '../components/Footer.jsx';
 
 export default function Home() {
@@ -46,6 +47,9 @@ export default function Home() {
           <div className="scroll-line" />
         </div>
       </section>
+
+      {/* NOTICES BAR — admin-managed site-wide announcements */}
+      <NoticesBar />
 
       {/* NOW PRINTING — renders nothing if no current printing set */}
       <NowPrinting />

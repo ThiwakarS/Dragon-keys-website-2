@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useSupabase } from '../hooks/useSupabase.js';
 import { useToast } from '../lib/toast.jsx';
-import { calculateEta, formatShipDate } from '../lib/utils.js';
+import { calculateEta, formatShipDate, USER_CANCELLABLE_STATUSES } from '../lib/utils.js';
 import StatusPill from '../components/StatusPill.jsx';
 import Footer from '../components/Footer.jsx';
 
@@ -12,38 +12,60 @@ export default function MyOrders() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  const fetchOrders = async () => {
+    if (!supabase) return;
+    const { data, error } = await supabase
+      .from('my_orders_with_position')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) {
+      toast.show('Could not load orders. Please refresh.', 'error');
+      setLoading(false);
+      return;
+    }
+    setOrders(data || []);
+    setLoading(false);
+  };
+
   useEffect(() => {
     if (!supabase) return;
-    let cancelled = false;
-
-    const fetchOrders = async () => {
-      const { data, error } = await supabase
-        .from('my_orders_with_position')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (cancelled) return;
-      if (error) {
-        toast.show('Could not load orders. Please refresh.', 'error');
-        setLoading(false);
-        return;
-      }
-      setOrders(data || []);
-      setLoading(false);
-    };
-
     fetchOrders();
 
     const channel = supabase
-      .channel('my-orders-changes')
+      .channel('my-orders-changes-' + Math.random().toString(36).slice(2, 8))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => fetchOrders())
       .subscribe();
 
-    return () => {
-      cancelled = true;
-      supabase.removeChannel(channel);
-    };
+    return () => { supabase.removeChannel(channel); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [supabase]);
+
+  const handleCancel = async (order) => {
+    const reason = window.prompt(
+      'Cancel this order?\n\nOptional: tell us why (leave blank to skip).',
+      ''
+    );
+    if (reason === null) return;
+
+    const { error } = await supabase.rpc('cancel_my_order', {
+      p_order_id: order.id,
+      p_reason:   reason.trim() || null,
+    });
+
+    if (error) {
+      if (error.message?.includes('too_late_to_cancel')) {
+        toast.show("Can't cancel — printing has started. Contact us on WhatsApp.", 'error', 6000);
+      } else if (error.message?.includes('already_final')) {
+        toast.show('This order is already finalised.', 'error');
+      } else {
+        toast.show('Failed: ' + error.message, 'error');
+      }
+      return;
+    }
+
+    toast.show('Order cancelled.', 'success');
+    fetchOrders();
+  };
 
   return (
     <div className="page">
@@ -64,10 +86,11 @@ export default function MyOrders() {
           </div>
         ) : (
           orders.map((o) => {
-            const active = o.status !== 'shipped' && o.status !== 'cancelled';
-            const eta = active ? calculateEta(o.product_id, o.position_in_product_queue || 1) : null;
-            const opts = o.selected_options || {};
-            const hasOpts = Object.keys(opts).length > 0;
+            const active    = !['shipped', 'delivered', 'cancelled'].includes(o.status);
+            const canCancel = USER_CANCELLABLE_STATUSES.includes(o.status);
+            const eta       = active ? calculateEta(o.product_id, o.position_in_product_queue || 1) : null;
+            const opts      = o.selected_options || {};
+            const hasOpts   = Object.keys(opts).length > 0;
 
             return (
               <div key={o.id} className="order-card">
@@ -132,14 +155,29 @@ export default function MyOrders() {
                     <strong>Shipped!</strong> Thank you for your order.
                   </div>
                 )}
+                {o.status === 'delivered' && (
+                  <div className="order-eta" style={{ color: 'var(--status-shipped)' }}>
+                    <strong>Delivered!</strong> You can now leave a review on the product page.
+                  </div>
+                )}
                 {o.status === 'cancelled' && (
                   <div className="order-eta" style={{ color: '#f2b84b' }}>
                     <strong>Cancelled.</strong>
-                    {o.cancellation_reason && (
-                      <>
-                        {' '}Reason: <em>{o.cancellation_reason}</em>
-                      </>
-                    )}
+                    {o.cancellation_reason && (<>  Reason: <em>{o.cancellation_reason}</em></>)}
+                  </div>
+                )}
+
+                {canCancel && (
+                  <div className="flex-row" style={{ marginTop: 16 }}>
+                    <button
+                      className="btn btn-ghost btn-small"
+                      onClick={() => handleCancel(o)}
+                    >
+                      Cancel this order
+                    </button>
+                    <span style={{ fontSize: '0.78rem', color: 'var(--muted)', alignSelf: 'center' }}>
+                      (Once printing starts, cancellation isn't possible.)
+                    </span>
                   </div>
                 )}
               </div>
