@@ -163,7 +163,9 @@ export default function BookOrder() {
       <div className="page">
         <div className="page-inner">
           <h1 className="page-title"><span className="accent">Order placed.</span></h1>
-          <p className="page-subtitle">I'll message you on WhatsApp shortly to confirm the deposit.</p>
+          <p className="page-subtitle">
+              No payment needed right now — once your order is ready to ship, I'll personally reach out to you on WhatsApp with the payment details. Payment is collected via GPay, only when your order is about to leave my hands.
+          </p>
 
           <div className="order-card">
             <div className="order-card-head">
@@ -334,7 +336,7 @@ export default function BookOrder() {
             </div>
 
             <div style={{ padding: 16, background: 'var(--card-2)', borderRadius: 10, border: '1px solid var(--border)', marginBottom: 20, fontSize: '0.9rem', color: 'var(--muted)' }}>
-              <strong style={{ color: 'var(--white)' }}>How this works:</strong> You'll get a queue number immediately. I'll then message you on WhatsApp to collect the deposit. Once paid, I start printing. Final payment is collected before shipping.
+              <strong style={{ color: 'var(--white)' }}>How this works:</strong> You'll get a queue number instantly. No payment is needed now — I'll personally message you on WhatsApp once your order is nearly ready to ship. Payment is then collected via GPay before it goes out.
             </div>
 
             <button type="submit" className="btn btn-primary btn-large" disabled={submitting}>
