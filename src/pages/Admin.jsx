@@ -18,7 +18,6 @@ export default function Admin() {
   const [tab, setTab] = useState('active');
   const [page, setPage] = useState(0);            // 0-indexed, per current tab
   const [rows, setRows] = useState([]);           // ONLY the current page of orders
-  const [pageTotal, setPageTotal] = useState(0);  // total rows matching current tab (all pages)
   const [counts, setCounts] = useState({
     active: 0, ready: 0, shipped: 0, delivered: 0, cancelled: 0, total: 0, perProduct: {},
   });
@@ -80,50 +79,47 @@ export default function Admin() {
     }
   }, []);
 
-  // One page of orders for the current tab. Uses .range() + count:'exact'
-  // so only PAGE_SIZE rows come back per request.
-  const fetchPage = useCallback(async (tabArg, pageArg) => {
+  // One page of orders for the current tab. Uses .range() (NO count) so
+  // only PAGE_SIZE rows come back and the view's per-row queue-position
+  // sub-queries run for just those rows — not the whole table. The total
+  // for the pager comes from the cheap base-table counts instead.
+  //   background:true  -> refresh in place without blanking the table
+  //                       (used after edits + realtime), so the big loader
+  //                       only appears on real navigation / first load.
+  const fetchPage = useCallback(async (tabArg, pageArg, { background = false } = {}) => {
     const sb = supabaseRef.current;
     if (!sb) return;
-    setLoading(true);
+    if (!background) setLoading(true);
 
     const from = pageArg * PAGE_SIZE;
     const to   = from + PAGE_SIZE - 1;
 
     let q = sb
       .from('admin_orders_with_position')
-      .select('*', { count: 'exact' })
+      .select('*')
       .order('product_id',  { ascending: true })
       .order('sort_order',  { ascending: true, nullsFirst: false })
       .order('queue_number',{ ascending: true })
       .range(from, to);
     q = applyTabFilter(q, tabArg);
 
-    const { data, error, count } = await q;
+    const { data, error } = await q;
     if (error) {
       toast.show('Could not load orders: ' + error.message, 'error');
       setLoading(false);
       return;
     }
 
-    // If the requested page is now beyond the end (e.g. rows were
-    // cancelled/shipped away while we were on a later page), clamp back.
-    const maxPage = Math.max(0, Math.ceil((count || 0) / PAGE_SIZE) - 1);
-    if (pageArg > maxPage) {
-      setPage(maxPage); // triggers a refetch via the page effect
-      return;           // keep loading=true until that refetch lands
-    }
-
     setRows(data || []);
-    setPageTotal(count || 0);
     setLoading(false);
   }, [applyTabFilter, toast]);
 
   // Refresh everything that's currently on screen (counts + current page).
-  // Used after any admin mutation and on realtime events.
+  // Used after any admin mutation and on realtime events. Background mode
+  // keeps the table visible (no full-screen loader on every status change).
   const refresh = useCallback(() => {
     fetchCounts();
-    fetchPage(tabRef.current, pageRef.current);
+    fetchPage(tabRef.current, pageRef.current, { background: true });
   }, [fetchCounts, fetchPage]);
 
   // Counts + realtime subscription — set up once per admin session.
@@ -137,7 +133,7 @@ export default function Admin() {
       .channel(channelName)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => {
         fetchCounts();
-        fetchPage(tabRef.current, pageRef.current);
+        fetchPage(tabRef.current, pageRef.current, { background: true });
       })
       .subscribe();
 
@@ -146,6 +142,7 @@ export default function Admin() {
   }, [supabase, user?.publicMetadata?.role]);
 
   // Current page of data — refetched whenever the tab or page changes.
+  // (Not background: navigating SHOULD show the loader.)
   useEffect(() => {
     const isUserAdmin = user?.publicMetadata?.role === 'admin';
     if (!supabase || !isUserAdmin) return;
@@ -155,6 +152,26 @@ export default function Admin() {
 
   // Switching tabs always resets to the first page.
   const changeTab = (t) => { setTab(t); setPage(0); };
+
+  // Total rows for the CURRENT tab — read from the cheap global counts,
+  // so the pager never pays for an exact count over the heavy view.
+  const tabTotal = (
+    tab === 'active'    ? counts.active
+  : tab === 'ready'     ? counts.ready
+  : tab === 'shipped'   ? counts.shipped
+  : tab === 'delivered' ? counts.delivered
+  : tab === 'cancelled' ? counts.cancelled
+  :                       counts.total
+  );
+  const pageTotal = tabTotal;
+
+  // If rows were removed from a later page (e.g. shipped/cancelled away),
+  // clamp the current page back into range once counts refresh.
+  useEffect(() => {
+    const maxPage = Math.max(0, Math.ceil(pageTotal / PAGE_SIZE) - 1);
+    if (page > maxPage) setPage(maxPage);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pageTotal]);
 
   // The current page of rows is already filtered + paginated server-side.
   const filtered = rows;
@@ -306,7 +323,7 @@ export default function Admin() {
                   letterSpacing: '0.03em',
                 }}>
                   <span>
-                    Showing {page * PAGE_SIZE + 1}–{page * PAGE_SIZE + filtered.length} of {pageTotal}
+                    Showing {page * PAGE_SIZE + 1}–{page * PAGE_SIZE + filtered.length} of {Math.max(pageTotal, page * PAGE_SIZE + filtered.length)}
                   </span>
                   {pageTotal > PAGE_SIZE && (
                     <span>Page {page + 1} of {Math.ceil(pageTotal / PAGE_SIZE)}</span>
