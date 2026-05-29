@@ -86,7 +86,9 @@ export default function MyOrders() {
           </div>
         ) : (
           orders.map((o) => {
-            const active    = !['shipped', 'delivered', 'cancelled'].includes(o.status);
+            // Ready-to-ship is printed and in hand — out of the queue, so no
+            // position/ETA. It still isn't a terminal state, though.
+            const active    = !['shipped', 'delivered', 'cancelled', 'ready_to_ship'].includes(o.status);
             const canCancel = USER_CANCELLABLE_STATUSES.includes(o.status);
             const eta       = active ? calculateEta(o.product_id, o.position_in_product_queue || 1) : null;
             const opts      = o.selected_options || {};
@@ -148,6 +150,11 @@ export default function MyOrders() {
                 {eta && (
                   <div className="order-eta">
                     Estimated to ship in <strong>~{eta.days} days</strong> (around <strong>{formatShipDate(eta.shipDate)}</strong>).
+                  </div>
+                )}
+                {o.status === 'ready_to_ship' && (
+                  <div className="order-eta">
+                    <strong>Packed and ready</strong> — your order is made and will ship soon.
                   </div>
                 )}
                 {o.status === 'shipped' && (

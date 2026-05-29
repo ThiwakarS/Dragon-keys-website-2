@@ -179,11 +179,8 @@ export const PRODUCTS = [
         label: "Design",
         required: true,
         options: [
-          // Drop design photos into public/assets/mudflaps/designs/
-          // Paths MUST start with "/"
-          { value: "Classic",  image: "/assets/mudflaps/20260308_103458.jpg"  },
-          { value: "Triangle logo",   image: "/assets/mudflaps/20260423_133002.jpeg"   },
-          { value: "Vehicle name",  image: "/assets/mudflaps/20260423_133010.jpeg"  },
+          // Update image path once new photo is ready
+          { value: "Standard",  image: "/assets/mudflaps/20260308_103458.jpg"  },
         ],
       },
     ],
