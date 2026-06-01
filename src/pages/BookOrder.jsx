@@ -35,6 +35,11 @@ export default function BookOrder() {
   const [blockedMessage, setBlockedMessage] = useState('');
   const [result, setResult] = useState(null);
 
+  // Coupon state. couponStatus: 'idle' | 'checking' | 'valid' | 'invalid' | 'rate_limited'
+  const [couponInput, setCouponInput]   = useState('');
+  const [couponStatus, setCouponStatus] = useState('idle');
+  const [appliedCoupon, setAppliedCoupon] = useState(null); // the validated code (uppercase) or null
+
   useEffect(() => {
     if (user?.fullName && !form.customer_name) {
       setForm((f) => ({ ...f, customer_name: user.fullName }));
@@ -91,6 +96,52 @@ export default function BookOrder() {
     setErrors((err) => ({ ...err, [`opt_${categoryKey}`]: null }));
   };
 
+  // Coupon: sanitize to uppercase A-Z/0-9, max 6. Editing resets any prior result.
+  const onCouponChange = (e) => {
+    const clean = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
+    setCouponInput(clean);
+    if (appliedCoupon) setAppliedCoupon(null);
+    if (couponStatus !== 'idle') setCouponStatus('idle');
+  };
+
+  const applyCoupon = async () => {
+    if (!supabase) return;
+    if (!/^[A-Z0-9]{6}$/.test(couponInput)) {
+      setCouponStatus('invalid');
+      return;
+    }
+    setCouponStatus('checking');
+    const { data, error } = await supabase.rpc('validate_coupon', {
+      p_code: couponInput,
+      p_product_id: product.id,
+    });
+    if (error) {
+      if (error.message?.includes('rate_limited')) {
+        setCouponStatus('rate_limited');
+        toast.show('Too many coupon attempts. Please try again in a few minutes.', 'error', 6000);
+      } else {
+        setCouponStatus('invalid');
+        toast.show('Could not check coupon: ' + error.message, 'error');
+      }
+      return;
+    }
+    const row = Array.isArray(data) ? data[0] : data;
+    if (row?.valid) {
+      setAppliedCoupon(couponInput);
+      setCouponStatus('valid');
+      toast.show('Coupon accepted!', 'success');
+    } else {
+      setAppliedCoupon(null);
+      setCouponStatus('invalid');
+    }
+  };
+
+  const clearCoupon = () => {
+    setCouponInput('');
+    setAppliedCoupon(null);
+    setCouponStatus('idle');
+  };
+
   const validate = () => {
     const errs = {};
     if (!form.customer_name.trim()) errs.customer_name = 'Name is required';
@@ -124,6 +175,7 @@ export default function BookOrder() {
       p_pincode: form.pincode.trim(),
       p_selected_options: selectedOptions,
       p_max_active: maxActive,
+      p_coupon_code: appliedCoupon || null,
     });
     setSubmitting(false);
 
@@ -186,7 +238,7 @@ export default function BookOrder() {
             <div className="order-meta">
               <div className="order-meta-item">
                 <span className="order-meta-label">Status</span>
-                <span className="order-meta-value">Awaiting Deposit</span>
+                <span className="order-meta-value">Ordered</span>
               </div>
               <div className="order-meta-item">
                 <span className="order-meta-label">Position in queue</span>
@@ -333,6 +385,54 @@ export default function BookOrder() {
                 inputMode="numeric"
               />
               {errors.pincode && <div className="form-error">{errors.pincode}</div>}
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">
+                Coupon code
+                <span style={{ textTransform: 'none', color: 'var(--muted)', fontWeight: 400, marginLeft: 6 }}>
+                  (optional)
+                </span>
+              </label>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                <input
+                  className="form-input"
+                  type="text"
+                  value={couponInput}
+                  onChange={onCouponChange}
+                  placeholder="6-character code"
+                  maxLength={6}
+                  disabled={couponStatus === 'valid'}
+                  style={{ flex: 1, textTransform: 'uppercase', letterSpacing: '0.15em', fontFamily: 'var(--font-display)' }}
+                  aria-label="Coupon code"
+                />
+                {couponStatus === 'valid' ? (
+                  <button type="button" className="btn btn-ghost" onClick={clearCoupon} style={{ flexShrink: 0 }}>
+                    Remove
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    onClick={applyCoupon}
+                    disabled={couponInput.length !== 6 || couponStatus === 'checking'}
+                    style={{ flexShrink: 0 }}
+                  >
+                    {couponStatus === 'checking' ? 'Checking…' : 'Apply'}
+                  </button>
+                )}
+              </div>
+              {couponStatus === 'valid' && (
+                <div style={{ color: '#4ade80', fontSize: '0.85rem', marginTop: 8 }}>
+                  ✓ Coupon accepted — it'll be applied when we confirm payment.
+                </div>
+              )}
+              {couponStatus === 'invalid' && (
+                <div className="form-error">That code isn't valid for this product.</div>
+              )}
+              {couponStatus === 'rate_limited' && (
+                <div className="form-error">Too many attempts. Please try again in a few minutes.</div>
+              )}
             </div>
 
             <div style={{ padding: 16, background: 'var(--card-2)', borderRadius: 10, border: '1px solid var(--border)', marginBottom: 20, fontSize: '0.9rem', color: 'var(--muted)' }}>

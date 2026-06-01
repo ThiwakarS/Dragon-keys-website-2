@@ -4,12 +4,13 @@
 
 import { findProduct } from '../data/products.js';
 
-// All valid order statuses — keep in sync with the Postgres enum
+// Statuses selectable in the admin status dropdown + the workflow order.
+// NOTE: 'printing' and 'awaiting_final_payment' still exist in the DB enum
+// (Postgres can't drop enum values) and remain valid for any legacy order,
+// but they're intentionally NOT offered in the UI anymore.
 export const ORDER_STATUSES = [
-  'awaiting_deposit',
+  'awaiting_deposit',   // shown as "Ordered"
   'in_queue',
-  'printing',
-  'awaiting_final_payment',
   'ready_to_ship',
   'shipped',
   'delivered',
@@ -17,14 +18,16 @@ export const ORDER_STATUSES = [
 ];
 
 export const STATUS_LABELS = {
-  awaiting_deposit:      'Awaiting Deposit',
+  awaiting_deposit:      'Ordered',
   in_queue:              'In Queue',
-  printing:              'Printing',
-  awaiting_final_payment:'Awaiting Final Payment',
   ready_to_ship:         'Ready to Ship',
   shipped:               'Shipped',
   delivered:             'Delivered',
   cancelled:             'Cancelled',
+  // Legacy statuses — no longer selectable, kept so old orders still
+  // render a readable label instead of a raw enum string.
+  printing:              'Printing',
+  awaiting_final_payment:'Awaiting Final Payment',
 };
 
 // Statuses that count a user as having an "active" order

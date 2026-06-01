@@ -19,7 +19,7 @@ export default function Admin() {
   const [page, setPage] = useState(0);            // 0-indexed, per current tab
   const [rows, setRows] = useState([]);           // ONLY the current page of orders
   const [counts, setCounts] = useState({
-    active: 0, ready: 0, shipped: 0, delivered: 0, cancelled: 0, total: 0, perProduct: {},
+    active: 0, queue: 0, ready: 0, shipped: 0, delivered: 0, cancelled: 0, total: 0, perProduct: {},
   });
   const [loading, setLoading] = useState(true);
 
@@ -32,8 +32,11 @@ export default function Admin() {
   const pageRef = useRef(page); pageRef.current = page;
 
   // Apply the active tab's status filter to a query builder.
+  //   active = "Ordered" (awaiting_deposit) — new orders needing action
+  //   queue  = "In Queue" (in_queue) — the print worklist
   const applyTabFilter = useCallback((q, t) => {
-    if (t === 'active')    return q.in('status', ACTIVE_STATUSES);
+    if (t === 'active')    return q.eq('status', 'awaiting_deposit');
+    if (t === 'queue')     return q.eq('status', 'in_queue');
     if (t === 'ready')     return q.eq('status', 'ready_to_ship');
     if (t === 'shipped')   return q.eq('status', 'shipped');
     if (t === 'delivered') return q.eq('status', 'delivered');
@@ -53,7 +56,8 @@ export default function Admin() {
     try {
       const results = await Promise.all([
         base(),                                              // total
-        base().in('status', ACTIVE_STATUSES),                // active
+        base().eq('status', 'awaiting_deposit'),             // active = Ordered
+        base().eq('status', 'in_queue'),                     // queue
         base().eq('status', 'ready_to_ship'),                // ready to ship
         base().eq('status', 'shipped'),                      // shipped
         base().eq('status', 'delivered'),                    // delivered
@@ -61,12 +65,13 @@ export default function Admin() {
         ...queueProducts.map((p) =>
           base().eq('product_id', p.id).in('status', ACTIVE_STATUSES)),
       ]);
-      const [total, active, ready, shipped, delivered, cancelled, ...perRes] = results;
+      const [total, active, queue, ready, shipped, delivered, cancelled, ...perRes] = results;
       const perProduct = {};
       queueProducts.forEach((p, i) => { perProduct[p.id] = perRes[i].count || 0; });
       setCounts({
         total:     total.count     || 0,
         active:    active.count    || 0,
+        queue:     queue.count     || 0,
         ready:     ready.count     || 0,
         shipped:   shipped.count   || 0,
         delivered: delivered.count || 0,
@@ -96,11 +101,20 @@ export default function Admin() {
 
     let q = sb
       .from('admin_orders_with_position')
-      .select('*')
-      .order('product_id',  { ascending: true })
-      .order('sort_order',  { ascending: true, nullsFirst: false })
-      .order('queue_number',{ ascending: true })
-      .range(from, to);
+      .select('*');
+
+    // Shipped & Delivered: show most-recently-processed first (higher
+    // queue_number = more recent). Everything else: production order.
+    if (tabArg === 'shipped' || tabArg === 'delivered') {
+      q = q.order('queue_number', { ascending: false });
+    } else {
+      q = q
+        .order('product_id',  { ascending: true })
+        .order('sort_order',  { ascending: true, nullsFirst: false })
+        .order('queue_number',{ ascending: true });
+    }
+
+    q = q.range(from, to);
     q = applyTabFilter(q, tabArg);
 
     const { data, error } = await q;
@@ -153,17 +167,24 @@ export default function Admin() {
   // Switching tabs always resets to the first page.
   const changeTab = (t) => { setTab(t); setPage(0); };
 
+  // Single source of truth for the order tabs. The buttons AND the
+  // per-tab total both read from this list, so they can never drift
+  // out of sync (which is how the Cancelled tab went missing before).
+  // `key` matches applyTabFilter; `countKey` indexes into counts.
+  const ORDER_TABS = [
+    { key: 'active',    label: 'Active',        countKey: 'active'    },
+    { key: 'queue',     label: 'Queue',         countKey: 'queue'     },
+    { key: 'ready',     label: 'Ready to Ship', countKey: 'ready'     },
+    { key: 'shipped',   label: 'Shipped',       countKey: 'shipped'   },
+    { key: 'delivered', label: 'Delivered',     countKey: 'delivered' },
+    { key: 'cancelled', label: 'Cancelled',     countKey: 'cancelled' },
+    { key: 'all',       label: 'All',           countKey: 'total'     },
+  ];
+
   // Total rows for the CURRENT tab — read from the cheap global counts,
   // so the pager never pays for an exact count over the heavy view.
-  const tabTotal = (
-    tab === 'active'    ? counts.active
-  : tab === 'ready'     ? counts.ready
-  : tab === 'shipped'   ? counts.shipped
-  : tab === 'delivered' ? counts.delivered
-  : tab === 'cancelled' ? counts.cancelled
-  :                       counts.total
-  );
-  const pageTotal = tabTotal;
+  const currentTabDef = ORDER_TABS.find((t) => t.key === tab) || ORDER_TABS[ORDER_TABS.length - 1];
+  const pageTotal = counts[currentTabDef.countKey] || 0;
 
   // If rows were removed from a later page (e.g. shipped/cancelled away),
   // clamp the current page back into range once counts refresh.
@@ -265,14 +286,21 @@ export default function Admin() {
           <button className={`tab-btn ${section === 'notices' ? 'active' : ''}`} onClick={() => setSection('notices')}>
             Notices
           </button>
+          <button className={`tab-btn ${section === 'coupons' ? 'active' : ''}`} onClick={() => setSection('coupons')}>
+            Coupons
+          </button>
         </div>
 
         {section === 'notices' ? (
           <AdminNotices supabase={supabase} toast={toast} />
+        ) : section === 'coupons' ? (
+          <AdminCoupons supabase={supabase} toast={toast} user={user} />
         ) : (
           <>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 16, marginBottom: 32 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 16, marginBottom: 32 }}>
               <StatBox label="Active" value={stats.active} />
+              <StatBox label="In Queue" value={stats.queue} />
+              <StatBox label="Ready to Ship" value={stats.ready} />
               <StatBox label="Shipped" value={stats.shipped} />
               <StatBox label="Delivered" value={stats.delivered} />
               <StatBox label="Cancelled" value={stats.cancelled} />
@@ -284,24 +312,15 @@ export default function Admin() {
             </div>
 
             <div className="tab-nav">
-              <button className={`tab-btn ${tab === 'active' ? 'active' : ''}`} onClick={() => changeTab('active')}>
-                Active ({stats.active})
-              </button>
-              <button className={`tab-btn ${tab === 'ready' ? 'active' : ''}`} onClick={() => changeTab('ready')}>
-                Ready to Ship ({stats.ready})
-              </button>
-              <button className={`tab-btn ${tab === 'shipped' ? 'active' : ''}`} onClick={() => changeTab('shipped')}>
-                Shipped ({stats.shipped})
-              </button>
-              <button className={`tab-btn ${tab === 'delivered' ? 'active' : ''}`} onClick={() => changeTab('delivered')}>
-                Delivered ({stats.delivered})
-              </button>
-              <button className={`tab-btn ${tab === 'cancelled' ? 'active' : ''}`} onClick={() => changeTab('cancelled')}>
-                Cancelled ({stats.cancelled})
-              </button>
-              <button className={`tab-btn ${tab === 'all' ? 'active' : ''}`} onClick={() => changeTab('all')}>
-                All ({stats.total})
-              </button>
+              {ORDER_TABS.map((t) => (
+                <button
+                  key={t.key}
+                  className={`tab-btn ${tab === t.key ? 'active' : ''}`}
+                  onClick={() => changeTab(t.key)}
+                >
+                  {t.label} ({stats[t.countKey] || 0})
+                </button>
+              ))}
             </div>
 
             {loading ? (
@@ -407,6 +426,22 @@ export default function Admin() {
                                 ⚠ {o.cancellation_reason}
                               </div>
                             )}
+                            {o.coupon_code && (
+                              <div style={{
+                                display: 'inline-block',
+                                marginTop: 6,
+                                padding: '2px 8px',
+                                borderRadius: 6,
+                                border: '1px solid rgba(74,222,128,0.4)',
+                                background: 'rgba(74,222,128,0.08)',
+                                color: '#4ade80',
+                                fontSize: '0.74rem',
+                                fontFamily: 'var(--font-display)',
+                                letterSpacing: '0.04em',
+                              }}>
+                                🎟 Coupon: {o.coupon_code}
+                              </div>
+                            )}
                           </td>
                           <td>
                             {active ? (
@@ -423,6 +458,12 @@ export default function Admin() {
                               value={o.status}
                               onChange={(e) => handleStatusChange(o, e.target.value)}
                             >
+                              {/* Legacy status (printing / awaiting_final_payment)
+                                  that's no longer offered: still show it so the
+                                  dropdown reflects the order's real state. */}
+                              {!ORDER_STATUSES.includes(o.status) && (
+                                <option value={o.status}>{STATUS_LABELS[o.status] || o.status}</option>
+                              )}
                               {ORDER_STATUSES.map((s) => (
                                 <option key={s} value={s}>{STATUS_LABELS[s]}</option>
                               ))}
@@ -539,7 +580,7 @@ function AdminNotices({ supabase, toast }) {
       .update({ active: !notice.active })
       .eq('id', notice.id);
     if (error) toast.show('Failed: ' + error.message, 'error');
-    else refresh();
+    else fetchAll();
   };
 
   const handleDelete = async (notice) => {
@@ -655,6 +696,210 @@ function levelColor(level) {
     warning: '#f2b84b',
     danger: '#f24b4b',
   }[level] || 'var(--muted)';
+}
+
+/* ========== Coupons admin sub-section ========== */
+
+function AdminCoupons({ supabase, toast, user }) {
+  const queueProducts = PRODUCTS.filter((p) => p.fulfillment === 'queue');
+
+  const [coupons, setCoupons] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [form, setForm] = useState({
+    code: '',
+    product_id: queueProducts[0]?.id || '',
+    description: '',
+  });
+
+  const fetchAll = useCallback(async () => {
+    if (!supabase) return;
+    const { data, error } = await supabase
+      .from('coupons')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) toast.show('Could not load coupons: ' + error.message, 'error');
+    else setCoupons(data || []);
+    setLoading(false);
+  }, [supabase, toast]);
+
+  useEffect(() => {
+    fetchAll();
+    if (!supabase) return;
+    const ch = supabase
+      .channel('admin-coupons-' + Math.random().toString(36).slice(2, 8))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'coupons' }, () => fetchAll())
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [supabase]);
+
+  // Sanitize as the admin types: uppercase, A-Z/0-9 only, max 6.
+  const onCodeChange = (e) => {
+    const clean = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
+    setForm((f) => ({ ...f, code: clean }));
+  };
+
+  const handleCreate = async (e) => {
+    e.preventDefault();
+    if (!/^[A-Z0-9]{6}$/.test(form.code)) {
+      toast.show('Code must be exactly 6 letters/numbers (A–Z, 0–9).', 'error');
+      return;
+    }
+    if (!form.product_id) {
+      toast.show('Please choose a product for this coupon.', 'error');
+      return;
+    }
+    const { error } = await supabase.from('coupons').insert({
+      code: form.code,
+      product_id: form.product_id,
+      description: form.description.trim() || null,
+      active: true,
+      created_by: user?.id || null,
+    });
+    if (error) {
+      if (error.code === '23505') {
+        toast.show('That code already exists for this product.', 'error');
+      } else {
+        toast.show('Failed: ' + error.message, 'error');
+      }
+      return;
+    }
+    toast.show('Coupon created', 'success');
+    setForm({ code: '', product_id: queueProducts[0]?.id || '', description: '' });
+    fetchAll();
+  };
+
+  const toggleActive = async (coupon) => {
+    const { error } = await supabase
+      .from('coupons')
+      .update({ active: !coupon.active })
+      .eq('id', coupon.id);
+    if (error) toast.show('Failed: ' + error.message, 'error');
+    else fetchAll();
+  };
+
+  const handleDelete = async (coupon) => {
+    if (!window.confirm(`Delete coupon ${coupon.code} permanently?`)) return;
+    const { error } = await supabase.from('coupons').delete().eq('id', coupon.id);
+    if (error) toast.show('Failed: ' + error.message, 'error');
+    else { toast.show('Deleted', 'success'); fetchAll(); }
+  };
+
+  const productName = (pid) => PRODUCTS.find((p) => p.id === pid)?.name || pid;
+
+  return (
+    <div>
+      <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.4rem', marginBottom: 16 }}>
+        Coupons
+      </h2>
+      <p style={{ color: 'var(--muted)', fontSize: '0.92rem', marginBottom: 24 }}>
+        Codes are 6 characters (A–Z, 0–9) and tied to a single product — a code made for
+        one product won't validate on another. Customers can only test codes through the
+        order form (rate-limited); the list here is never exposed to them. Deactivate to
+        pause a code without deleting it.
+      </p>
+
+      {/* New-coupon form */}
+      <form onSubmit={handleCreate} style={{
+        background: 'var(--card)',
+        border: '1px solid var(--border)',
+        borderRadius: 'var(--radius-lg)',
+        padding: 20,
+        marginBottom: 32,
+      }}>
+        <div className="form-group">
+          <label className="form-label">Code</label>
+          <input
+            className="form-input"
+            value={form.code}
+            onChange={onCodeChange}
+            placeholder="e.g. SAVE10"
+            style={{ textTransform: 'uppercase', letterSpacing: '0.15em', fontFamily: 'var(--font-display)' }}
+            maxLength={6}
+          />
+          <div className="form-help">{form.code.length} / 6 — letters and numbers only</div>
+        </div>
+        <div className="form-group">
+          <label className="form-label">Product</label>
+          <select
+            className="form-select"
+            value={form.product_id}
+            onChange={(e) => setForm({ ...form, product_id: e.target.value })}
+          >
+            {queueProducts.map((p) => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+        </div>
+        <div className="form-group">
+          <label className="form-label">Description <span style={{ color: 'var(--muted)', textTransform: 'none', fontWeight: 400 }}>(optional, only you see it)</span></label>
+          <input
+            className="form-input"
+            value={form.description}
+            onChange={(e) => setForm({ ...form, description: e.target.value })}
+            placeholder="e.g. Diwali promo — 10% off"
+            maxLength={200}
+          />
+        </div>
+        <button type="submit" className="btn btn-primary">Create coupon</button>
+      </form>
+
+      {/* Existing coupons */}
+      <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '1.1rem', marginBottom: 12 }}>
+        All coupons
+      </h3>
+      {loading ? (
+        <div className="loading-center"><div className="loader" /></div>
+      ) : coupons.length === 0 ? (
+        <div className="empty-state">No coupons yet.</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {coupons.map((c) => (
+            <div key={c.id} style={{
+              padding: 14,
+              borderRadius: 10,
+              border: `1px solid ${c.active ? 'var(--border-strong)' : 'var(--border)'}`,
+              background: 'var(--card)',
+              opacity: c.active ? 1 : 0.5,
+              display: 'flex',
+              gap: 12,
+              alignItems: 'flex-start',
+              flexWrap: 'wrap',
+            }}>
+              <div style={{ flex: 1, minWidth: 240 }}>
+                <div style={{
+                  fontFamily: 'var(--font-display)',
+                  fontSize: '1.05rem',
+                  letterSpacing: '0.12em',
+                  color: c.active ? '#4ade80' : 'var(--muted)',
+                  marginBottom: 4,
+                }}>
+                  {c.code} {c.active ? '' : '· (inactive)'}
+                </div>
+                <div style={{ fontSize: '0.85rem', color: 'var(--muted)' }}>
+                  For: <span style={{ color: 'var(--white)' }}>{productName(c.product_id)}</span>
+                </div>
+                {c.description && (
+                  <div style={{ fontSize: '0.85rem', marginTop: 4 }}>{c.description}</div>
+                )}
+                <div style={{ fontSize: '0.75rem', color: 'var(--muted)', marginTop: 4 }}>
+                  {new Date(c.created_at).toLocaleString()}
+                </div>
+              </div>
+              <div className="flex-row">
+                <button className="btn btn-ghost btn-small" onClick={() => toggleActive(c)}>
+                  {c.active ? 'Deactivate' : 'Activate'}
+                </button>
+                <button className="btn btn-ghost btn-small" onClick={() => handleDelete(c)}>
+                  Delete
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function Pager({ page, pageSize, total, onPage }) {
