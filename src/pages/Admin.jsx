@@ -3,7 +3,7 @@ import { Navigate } from 'react-router-dom';
 import { useUser } from '@clerk/clerk-react';
 import { useSupabase } from '../hooks/useSupabase.js';
 import { useToast } from '../lib/toast.jsx';
-import { ORDER_STATUSES, STATUS_LABELS, ACTIVE_STATUSES, isAdmin, calculateEta } from '../lib/utils.js';
+import { ORDER_STATUSES, STATUS_LABELS, ACTIVE_STATUSES, isAdmin } from '../lib/utils.js';
 import { PRODUCTS } from '../data/products.js';
 import Footer from '../components/Footer.jsx';
 
@@ -100,11 +100,14 @@ export default function Admin() {
     const to   = from + PAGE_SIZE - 1;
 
     let q = sb
-      .from('admin_orders_with_position')
+      .from('orders')
       .select('*');
 
     // Shipped & Delivered: show most-recently-processed first (higher
     // queue_number = more recent). Everything else: production order.
+    // NOTE: we read the base `orders` table directly (not the position
+    // view) — the admin doesn't need per-row queue position, and avoiding
+    // those per-row subqueries is what keeps deep pages from timing out.
     if (tabArg === 'shipped' || tabArg === 'delivered') {
       q = q.order('queue_number', { ascending: false });
     } else {
@@ -357,7 +360,6 @@ export default function Admin() {
                       <th>Order</th>
                       <th>Customer</th>
                       <th>Product &amp; Options</th>
-                      <th>Pos / ETA</th>
                       <th>Status</th>
                       <th>Tracking</th>
                       <th>Actions</th>
@@ -366,9 +368,8 @@ export default function Admin() {
                   <tbody>
                     {filtered.map((o) => {
                       // "active" here = still in the production queue. Ready-to-ship
-                      // orders are printed/in-hand, so they get no queue controls.
+                      // and terminal orders get no queue-reorder controls.
                       const active = !['shipped','delivered','cancelled','ready_to_ship'].includes(o.status);
-                      const eta = active ? calculateEta(o.product_id, o.position_in_product_queue || 1) : null;
                       const opts = o.selected_options || {};
                       const hasOpts = Object.keys(opts).length > 0;
 
@@ -442,14 +443,6 @@ export default function Admin() {
                                 🎟 Coupon: {o.coupon_code}
                               </div>
                             )}
-                          </td>
-                          <td>
-                            {active ? (
-                              <>
-                                <div>{o.position_in_product_queue}/{o.total_in_product_queue}</div>
-                                <div style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>~{eta?.days}d</div>
-                              </>
-                            ) : '—'}
                           </td>
                           <td>
                             <select
