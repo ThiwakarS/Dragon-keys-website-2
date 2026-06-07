@@ -130,19 +130,19 @@ export const PRODUCTS = [
     name: "Triumph Speed / Scrambler 400x Mudflap",
     category: "3D Printed",
     fulfillment: "queue",
-    throughputPerDay: 4,
+    throughputPerDay: 5,
     maxActivePerUser: 2,  // ← bump this to 2, 3, etc when you scale production
     description:
       "Custom-designed rear mudflap for the Triumph Speed 400, Scrambler 400x, Speed T4, Thruxton 400 and Scrambler 400xc, printed in flexible TPU95A. Easy installation.",
     price: "₹600 - 640",
     images: [
-      "/assets/mudflaps/20260308_103458.jpg",
-      "/assets/mudflaps/20260423_133002.jpeg",
-      "/assets/mudflaps/20260423_133010.jpeg",
-      "/assets/mudflaps/20260308_103515.jpg",
-      "/assets/mudflaps/20260308_103532.jpg",
-      "/assets/mudflaps/20260308_103608.jpg",
-      "/assets/mudflaps/20260308_103651.jpg",  
+      "/assets/mudflaps/20260531_173243.jpg",
+      "/assets/mudflaps/20260531_173248.jpg",
+      // "/assets/mudflaps/20260423_133010.jpeg",
+      // "/assets/mudflaps/20260308_103515.jpg",
+      // "/assets/mudflaps/20260308_103532.jpg",
+      // "/assets/mudflaps/20260308_103608.jpg",
+      // "/assets/mudflaps/20260308_103651.jpg",  
       
       "youtube:GCa6L8qT5BM",
 
@@ -180,7 +180,7 @@ export const PRODUCTS = [
         required: true,
         options: [
           // Update image path once new photo is ready
-          { value: "Standard",  image: "/assets/mudflaps/20260308_103458.jpg"  },
+          { value: "Standard",  image: "/assets/mudflaps/20260531_173243.jpg"  },
         ],
       },
     ],
@@ -202,10 +202,10 @@ export const PRODUCTS = [
       },
     ],
     notes: [
-      { type: "info",    text: "Scrambler variants — ₹640 · Speed variants — ₹600 · Advance — ₹200" },
+      { type: "info",    text: "Scrambler variants — ₹640 · Speed variants — ₹600" },
       { type: "info",    text: "Open source for personal use only. Files on Cults3D." },
       { type: "info",    text: "Delivery charges calculated at time of delivery." },
-      { type: "info",    text: "Based in Chennai, Tamilnadu — collect on site and I'll install it for free. Contact me on WhatsApp." },
+      { type: "info",    text: "Based in Chennai, Tamilnadu — collect on site and I'll install it for free." },
       { type: "info",    text: "Installation: Two mounting holes under the seat. Remove the bolt (Allen key 5mm — in stock toolkit). Pinch the mat: Nut → TPU mat → Washer. Tighten firmly until snug." },
       { type: "tip",     text: "Before fitting, clean the bolt and mudguard. Apply a small amount of oil where the nut spins — stops the mat from rotating while tightening." },
       { type: "caution", text: "If the mat rotates with the nut: back off a quarter turn, hold the mat flat with your finger, then re-tighten. End result — mat should sit flush with the underside of the fender." },
