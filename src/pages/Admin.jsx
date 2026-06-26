@@ -23,8 +23,19 @@ export default function Admin() {
   });
   const [loading, setLoading] = useState(true);
 
+  // Bulk selection: Set of selected order ids (current page), plus the
+  // status chosen in the bulk action bar.
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [bulkStatus, setBulkStatus]   = useState('');
+  const [bulkBusy, setBulkBusy]       = useState(false);
+
   const supabaseRef = useRef(supabase);
   supabaseRef.current = supabase;
+
+  // While a bulk update is settling, ignore the burst of realtime row
+  // events it produces (otherwise the page refetches once per row). Single
+  // edits don't set this, so they still refresh instantly.
+  const suppressRealtimeUntil = useRef(0);
 
   // Keep current tab/page reachable from the realtime callback without
   // recreating the subscription on every change.
@@ -149,6 +160,9 @@ export default function Admin() {
     const channel = supabase
       .channel(channelName)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => {
+        // Skip the storm of events a bulk update produces; the bulk
+        // handler does one explicit refresh itself.
+        if (Date.now() < suppressRealtimeUntil.current) return;
         fetchCounts();
         fetchPage(tabRef.current, pageRef.current, { background: true });
       })
@@ -167,8 +181,11 @@ export default function Admin() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [supabase, user?.publicMetadata?.role, tab, page]);
 
+  // Selection is per-page; drop it whenever the page changes.
+  useEffect(() => { setSelectedIds(new Set()); }, [page, tab]);
+
   // Switching tabs always resets to the first page.
-  const changeTab = (t) => { setTab(t); setPage(0); };
+  const changeTab = (t) => { setTab(t); setPage(0); setSelectedIds(new Set()); };
 
   // Single source of truth for the order tabs. The buttons AND the
   // per-tab total both read from this list, so they can never drift
@@ -243,6 +260,93 @@ export default function Admin() {
       .eq('id', orderId);
     if (error) toast.show('Failed: ' + error.message, 'error');
     else { toast.show('Tracking saved', 'success'); refresh(); }
+  };
+
+  // ----- per-order coupon (admin override, validated server-side) -----
+  const handleSetCoupon = async (order, rawCode) => {
+    const code = (rawCode || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
+    const { data, error } = await supabase.rpc('admin_set_order_coupon', {
+      p_order_id: order.id,
+      p_code: code || null,
+    });
+    if (error) {
+      if (error.message?.includes('coupon_not_found_for_product')) {
+        toast.show(`No coupon "${code}" exists for ${order.product_name}.`, 'error', 6000);
+      } else if (error.message?.includes('invalid_format')) {
+        toast.show('Coupon must be 6 characters (A–Z, 0–9).', 'error');
+      } else {
+        toast.show('Failed: ' + error.message, 'error');
+      }
+      return false;
+    }
+    toast.show(data ? `Coupon set: ${data}` : 'Coupon cleared', 'success');
+    refresh();
+    return true;
+  };
+
+  // ----- bulk selection helpers -----
+  const toggleOne = (id) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const allOnPageSelected = filtered.length > 0 && filtered.every((o) => selectedIds.has(o.id));
+
+  const toggleAllOnPage = () => {
+    setSelectedIds((prev) => {
+      if (filtered.every((o) => prev.has(o.id))) {
+        // all selected -> clear those on this page
+        const next = new Set(prev);
+        filtered.forEach((o) => next.delete(o.id));
+        return next;
+      }
+      const next = new Set(prev);
+      filtered.forEach((o) => next.add(o.id));
+      return next;
+    });
+  };
+
+  const clearSelection = () => setSelectedIds(new Set());
+
+  const handleBulkApply = async () => {
+    const ids = [...selectedIds];
+    if (ids.length === 0) { toast.show('Select at least one order.', 'error'); return; }
+    if (!bulkStatus) { toast.show('Pick a status to apply.', 'error'); return; }
+
+    let reason = null;
+    if (bulkStatus === 'cancelled') {
+      reason = window.prompt(
+        `Cancelling ${ids.length} order(s). Reason (shown to customers):`,
+        ''
+      );
+      if (reason === null) return; // admin backed out
+    }
+
+    if (!window.confirm(`Set ${ids.length} order(s) to "${STATUS_LABELS[bulkStatus]}"?`)) return;
+
+    setBulkBusy(true);
+    // Suppress the realtime storm these updates will create; we refresh once below.
+    suppressRealtimeUntil.current = Date.now() + 4000;
+
+    const { data, error } = await supabase.rpc('admin_bulk_update_status', {
+      p_order_ids: ids,
+      p_new_status: bulkStatus,
+      p_reason: reason,
+    });
+    setBulkBusy(false);
+
+    if (error) {
+      suppressRealtimeUntil.current = 0;
+      toast.show('Bulk update failed: ' + error.message, 'error', 6000);
+      return;
+    }
+    toast.show(`Updated ${data ?? ids.length} order(s) to ${STATUS_LABELS[bulkStatus]}.`, 'success');
+    setSelectedIds(new Set());
+    setBulkStatus('');
+    refresh(); // single settle refresh
   };
 
   const handleMove = async (orderId, direction) => {
@@ -332,6 +436,44 @@ export default function Admin() {
               <div className="empty-state">No orders in this view.</div>
             ) : (
               <>
+                {selectedIds.size > 0 && (
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: 12,
+                    padding: '12px 16px',
+                    marginBottom: 14,
+                    borderRadius: 10,
+                    border: '1px solid var(--blue)',
+                    background: 'rgba(58,180,242,0.08)',
+                  }}>
+                    <strong style={{ color: 'var(--blue)' }}>{selectedIds.size} selected</strong>
+                    <span style={{ color: 'var(--muted)' }}>→</span>
+                    <select
+                      className="form-select"
+                      style={{ padding: '6px 10px', fontSize: '0.85rem', minWidth: 170 }}
+                      value={bulkStatus}
+                      onChange={(e) => setBulkStatus(e.target.value)}
+                    >
+                      <option value="">Set status to…</option>
+                      {ORDER_STATUSES.map((s) => (
+                        <option key={s} value={s}>{STATUS_LABELS[s]}</option>
+                      ))}
+                    </select>
+                    <button
+                      className="btn btn-primary btn-small"
+                      onClick={handleBulkApply}
+                      disabled={bulkBusy || !bulkStatus}
+                    >
+                      {bulkBusy ? 'Applying…' : 'Apply'}
+                    </button>
+                    <button className="btn btn-ghost btn-small" onClick={clearSelection} disabled={bulkBusy}>
+                      Clear selection
+                    </button>
+                  </div>
+                )}
+
                 <div style={{
                   display: 'flex',
                   justifyContent: 'space-between',
@@ -356,6 +498,15 @@ export default function Admin() {
                   <table className="admin-table">
                   <thead>
                     <tr>
+                      <th style={{ width: 34 }}>
+                        <input
+                          type="checkbox"
+                          checked={allOnPageSelected}
+                          onChange={toggleAllOnPage}
+                          aria-label="Select all on this page"
+                          style={{ cursor: 'pointer' }}
+                        />
+                      </th>
                       <th>Queue</th>
                       <th>Order</th>
                       <th>Customer</th>
@@ -374,7 +525,20 @@ export default function Admin() {
                       const hasOpts = Object.keys(opts).length > 0;
 
                       return (
-                        <tr key={o.id} style={o.is_current ? { background: 'rgba(58,180,242,0.06)' } : undefined}>
+                        <tr key={o.id} style={
+                          selectedIds.has(o.id)
+                            ? { background: 'rgba(58,180,242,0.12)' }
+                            : (o.is_current ? { background: 'rgba(58,180,242,0.06)' } : undefined)
+                        }>
+                          <td>
+                            <input
+                              type="checkbox"
+                              checked={selectedIds.has(o.id)}
+                              onChange={() => toggleOne(o.id)}
+                              aria-label={`Select order #${o.queue_number}`}
+                              style={{ cursor: 'pointer' }}
+                            />
+                          </td>
                           <td>
                             <strong style={{ color: 'var(--blue)' }}>#{o.queue_number}</strong>
                             {o.is_current && (
@@ -427,22 +591,7 @@ export default function Admin() {
                                 ⚠ {o.cancellation_reason}
                               </div>
                             )}
-                            {o.coupon_code && (
-                              <div style={{
-                                display: 'inline-block',
-                                marginTop: 6,
-                                padding: '2px 8px',
-                                borderRadius: 6,
-                                border: '1px solid rgba(74,222,128,0.4)',
-                                background: 'rgba(74,222,128,0.08)',
-                                color: '#4ade80',
-                                fontSize: '0.74rem',
-                                fontFamily: 'var(--font-display)',
-                                letterSpacing: '0.04em',
-                              }}>
-                                🎟 Coupon: {o.coupon_code}
-                              </div>
-                            )}
+                            <CouponCell order={o} onSet={handleSetCoupon} />
                           </td>
                           <td>
                             <select
@@ -897,6 +1046,7 @@ function AdminCoupons({ supabase, toast, user }) {
 
 function Pager({ page, pageSize, total, onPage }) {
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
+  const [jump, setJump] = useState('');
   if (pageCount <= 1) return null;
 
   const last = pageCount - 1;
@@ -915,6 +1065,15 @@ function Pager({ page, pageSize, total, onPage }) {
 
   const btnStyle = { minWidth: 38, padding: '6px 10px' };
 
+  const go = () => {
+    const n = parseInt(jump, 10);
+    if (!Number.isNaN(n)) {
+      const target = Math.min(Math.max(n, 1), pageCount) - 1; // clamp into range
+      onPage(target);
+    }
+    setJump('');
+  };
+
   return (
     <div style={{
       display: 'flex',
@@ -924,14 +1083,10 @@ function Pager({ page, pageSize, total, onPage }) {
       flexWrap: 'wrap',
       marginTop: 20,
     }}>
-      <button
-        className="btn btn-ghost btn-small"
-        style={btnStyle}
-        onClick={() => onPage(page - 1)}
-        disabled={page <= 0}
-        aria-label="Previous page"
-        type="button"
-      >←</button>
+      <button className="btn btn-ghost btn-small" style={btnStyle}
+        onClick={() => onPage(0)} disabled={page <= 0} aria-label="First page" type="button">«</button>
+      <button className="btn btn-ghost btn-small" style={btnStyle}
+        onClick={() => onPage(page - 1)} disabled={page <= 0} aria-label="Previous page" type="button">‹</button>
 
       {items.map((it) =>
         typeof it === 'string' ? (
@@ -949,14 +1104,116 @@ function Pager({ page, pageSize, total, onPage }) {
         )
       )}
 
+      <button className="btn btn-ghost btn-small" style={btnStyle}
+        onClick={() => onPage(page + 1)} disabled={page >= last} aria-label="Next page" type="button">›</button>
+      <button className="btn btn-ghost btn-small" style={btnStyle}
+        onClick={() => onPage(last)} disabled={page >= last} aria-label="Last page" type="button">»</button>
+
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginLeft: 10 }}>
+        <input
+          type="number"
+          min={1}
+          max={pageCount}
+          value={jump}
+          onChange={(e) => setJump(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') go(); }}
+          placeholder="Go to"
+          aria-label="Go to page"
+          style={{
+            width: 72, padding: '6px 8px', fontSize: '0.82rem',
+            background: 'var(--card)', color: 'var(--white)',
+            border: '1px solid var(--border)', borderRadius: 8,
+          }}
+        />
+        <button className="btn btn-ghost btn-small" style={btnStyle} onClick={go} type="button">Go</button>
+      </span>
+    </div>
+  );
+}
+
+/* ---------- Per-order coupon editor (admin) ---------- */
+function CouponCell({ order, onSet }) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue]     = useState(order.coupon_code || '');
+  const [saving, setSaving]   = useState(false);
+
+  // Keep local value in sync if the order's coupon changes underneath us.
+  useEffect(() => { if (!editing) setValue(order.coupon_code || ''); }, [order.coupon_code, editing]);
+
+  const onChange = (e) => setValue(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6));
+
+  const save = async (code) => {
+    setSaving(true);
+    const ok = await onSet(order, code);
+    setSaving(false);
+    if (ok) setEditing(false);
+  };
+
+  if (!editing) {
+    return (
+      <div style={{ marginTop: 6 }}>
+        {order.coupon_code ? (
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: 8,
+            padding: '2px 8px', borderRadius: 6,
+            border: '1px solid rgba(74,222,128,0.4)', background: 'rgba(74,222,128,0.08)',
+            color: '#4ade80', fontSize: '0.74rem',
+            fontFamily: 'var(--font-display)', letterSpacing: '0.04em',
+          }}>
+            🎟 {order.coupon_code}
+            <button
+              onClick={() => { setValue(order.coupon_code || ''); setEditing(true); }}
+              style={{ background: 'none', border: 'none', color: 'var(--blue)', cursor: 'pointer', fontSize: '0.72rem', padding: 0 }}
+            >edit</button>
+          </span>
+        ) : (
+          <button
+            className="btn btn-ghost btn-small"
+            style={{ padding: '2px 8px', fontSize: '0.72rem' }}
+            onClick={() => { setValue(''); setEditing(true); }}
+          >+ Coupon</button>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ marginTop: 6, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+      <input
+        value={value}
+        onChange={onChange}
+        placeholder="6-char code"
+        maxLength={6}
+        autoFocus
+        style={{
+          width: 100, padding: '4px 8px', fontSize: '0.78rem',
+          textTransform: 'uppercase', letterSpacing: '0.1em',
+          fontFamily: 'var(--font-display)',
+          background: 'var(--card)', color: 'var(--white)',
+          border: '1px solid var(--border)', borderRadius: 6,
+        }}
+        onKeyDown={(e) => { if (e.key === 'Enter' && value.length === 6) save(value); }}
+      />
+      <button
+        className="btn btn-primary btn-small"
+        style={{ padding: '2px 8px', fontSize: '0.72rem' }}
+        disabled={saving || value.length !== 6}
+        onClick={() => save(value)}
+      >{saving ? '…' : 'Save'}</button>
+      {order.coupon_code && (
+        <button
+          className="btn btn-ghost btn-small"
+          style={{ padding: '2px 8px', fontSize: '0.72rem' }}
+          disabled={saving}
+          onClick={() => save('')}
+        >Clear</button>
+      )}
       <button
         className="btn btn-ghost btn-small"
-        style={btnStyle}
-        onClick={() => onPage(page + 1)}
-        disabled={page >= last}
-        aria-label="Next page"
-        type="button"
-      >→</button>
+        style={{ padding: '2px 8px', fontSize: '0.72rem' }}
+        disabled={saving}
+        onClick={() => { setEditing(false); setValue(order.coupon_code || ''); }}
+      >Cancel</button>
     </div>
   );
 }
