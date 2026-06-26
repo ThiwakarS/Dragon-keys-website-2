@@ -130,10 +130,10 @@ export const PRODUCTS = [
     name: "Triumph Speed / Scrambler 400x Mudflap",
     category: "3D Printed",
     fulfillment: "queue",
-    throughputPerDay: 5,
+    throughputPerDay: 14,
     maxActivePerUser: 2,  // ← bump this to 2, 3, etc when you scale production
     description:
-      "Custom-designed rear mudflap for the Triumph Speed 400, Scrambler 400x, Speed T4, Thruxton 400 and Scrambler 400xc, printed in flexible TPU95A. Easy installation.",
+      "Custom-designed rear mudflap for the Triumph Speed 400, Speed T4, Thruxton 400, Tracker 400, Scrambler 400x and Scrambler 400xc, printed in flexible TPU95A. Easy installation.",
     price: "₹600 - 640",
     images: [
       "/assets/mudflaps/20260531_173243.jpg",
@@ -170,8 +170,14 @@ export const PRODUCTS = [
         label: "Vehicle Model",
         required: true,
         options: [
-          { value: "Triumph Speed 400, T4, Thruxton 400" },
-          { value: "Triumph Scrambler 400x, 400xc" },
+          // Bare labels — these exact strings are saved on each new order.
+          // No per-model images: cards show the 2-letter fallback tile.
+          { value: "Speed 400" },
+          { value: "Speed T4" },
+          { value: "Thruxton 400" },
+          { value: "Tracker 400" },
+          { value: "Scrambler 400x" },
+          { value: "Scrambler 400xc" },
         ],
       },
       {
@@ -195,14 +201,14 @@ export const PRODUCTS = [
       {
         label: "Fitment",
         rows: [
-          { key: "Compatible",         value: "Triumph Speed 400, Scrambler 400x, Speed T4, Thruxton 400, Scrambler 400xc" },
+          { key: "Compatible",         value: "Triumph Speed 400, Speed T4, Thruxton 400, Tracker 400, Scrambler 400x, Scrambler 400xc" },
           { key: "Mounting",           value: "Rear fender holes — sits between nut and washer. Order: Nut → Mudflap → Washer" },
           { key: "Print Instructions", value: "No supports. 0.2mm layer height, Gyroid infill 15% density" },
         ],
       },
     ],
     notes: [
-      { type: "info",    text: "Scrambler variants — ₹640 · Speed variants — ₹600" },
+      { type: "info",    text: "Speed 400 / Speed T4 / Thruxton 400 / Tracker 400 — ₹600 · Scrambler 400x / Scrambler 400xc — ₹640. Delivery charged separately." },
       { type: "info",    text: "Open source for personal use only. Files on Cults3D." },
       { type: "info",    text: "Delivery charges calculated at time of delivery." },
       { type: "info",    text: "Based in Chennai, Tamilnadu — collect on site and I'll install it for free." },
