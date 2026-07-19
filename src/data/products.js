@@ -136,13 +136,19 @@ export const PRODUCTS = [
       "Custom-designed rear mudflap for the Triumph Speed 400, Speed T4, Thruxton 400, Tracker 400, Scrambler 400x and Scrambler 400xc, printed in flexible TPU95A. Easy installation.",
     price: "₹600 - 640",
     images: [
-      "/assets/mudflaps/20260531_173243.jpg",
-      "/assets/mudflaps/20260531_173248.jpg",
+      // "/assets/mudflaps/20260531_173243.jpg",
+      // "/assets/mudflaps/20260531_173248.jpg",
       // "/assets/mudflaps/20260423_133010.jpeg",
       // "/assets/mudflaps/20260308_103515.jpg",
       // "/assets/mudflaps/20260308_103532.jpg",
       // "/assets/mudflaps/20260308_103608.jpg",
-      // "/assets/mudflaps/20260308_103651.jpg",  
+      // "/assets/mudflaps/20260308_103651.jpg",
+      "/assets/mudflaps/Speed 400.jpg",
+      "/assets/mudflaps/Speed T4.jpg",
+      "/assets/mudflaps/Scrambler 400X.jpg",
+      "/assets/mudflaps/Scrambler 400XC.jpg",
+      "/assets/mudflaps/Tracker 400.jpg",
+      "/assets/mudflaps/Thruxton 400.jpg",
       
       "youtube:GCa6L8qT5BM",
 
