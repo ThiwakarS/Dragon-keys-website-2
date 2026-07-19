@@ -7,6 +7,35 @@ import { ORDER_STATUSES, STATUS_LABELS, ACTIVE_STATUSES, isAdmin } from '../lib/
 import { PRODUCTS } from '../data/products.js';
 import Footer from '../components/Footer.jsx';
 
+/* ---------- Search helpers (admin order search) ---------- */
+// Fields offered in the search dropdown. `placeholder` guides the admin on
+// the expected format for each mode.
+const SEARCH_FIELDS = [
+  { key: 'name',  label: 'Customer name', placeholder: 'Type a name — partial match, e.g. "ram"' },
+  { key: 'queue', label: 'Queue number',  placeholder: 'Exact queue number, e.g. 421' },
+  { key: 'uuid',  label: 'Order ID',      placeholder: 'Paste the full order ID (UUID)' },
+];
+
+const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+
+// Escape LIKE wildcards so typing "%" or "_" searches for the literal
+// character instead of matching everything.
+const escapeLike = (s) => s.replace(/[\\%_]/g, (m) => '\\' + m);
+
+// Returns a human-readable problem with the applied search, or null if
+// it's queryable. Invalid input never reaches Postgres — we short-circuit
+// client-side and show this hint instead of a raw DB error.
+const searchInvalidReason = (s) => {
+  if (!s) return null;
+  if (s.field === 'queue' && !/^\d+$/.test(s.value)) {
+    return 'Queue number search needs digits only (e.g. 421).';
+  }
+  if (s.field === 'uuid' && !UUID_RE.test(s.value)) {
+    return 'Order IDs are UUIDs — paste the complete ID (format: 8-4-4-4-12 hex characters).';
+  }
+  return null;
+};
+
 export default function Admin() {
   const { user, isLoaded } = useUser();
   const supabase = useSupabase();
@@ -29,6 +58,17 @@ export default function Admin() {
   const [bulkStatus, setBulkStatus]   = useState('');
   const [bulkBusy, setBulkBusy]       = useState(false);
 
+  // ----- Search (all orders, every status) -----
+  //   searchInput = raw text in the box (updates per keystroke)
+  //   search      = APPLIED search { field, value } after debounce, or null.
+  //                 While non-null, the table shows search results across
+  //                 ALL statuses and the tab filter is ignored.
+  //   searchTotal = exact match count for the pager in search mode.
+  const [searchField, setSearchField] = useState('name');
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch]           = useState(null);
+  const [searchTotal, setSearchTotal] = useState(0);
+
   const supabaseRef = useRef(supabase);
   supabaseRef.current = supabase;
 
@@ -41,6 +81,29 @@ export default function Admin() {
   // recreating the subscription on every change.
   const tabRef  = useRef(tab);  tabRef.current  = tab;
   const pageRef = useRef(page); pageRef.current = page;
+
+  // Same trick for search: fetchPage reads this ref, so realtime refreshes
+  // and background refetches automatically respect the active search.
+  const searchRef = useRef(search); searchRef.current = search;
+
+  // Debounce the search box: apply 400ms after the admin stops typing, so
+  // we don't fire one query per keystroke. Clearing the box exits search
+  // mode immediately. Changing the dropdown re-applies with the new field.
+  useEffect(() => {
+    const raw = searchInput.trim();
+    if (!raw) {
+      if (searchRef.current) { setSearch(null); setPage(0); }
+      return;
+    }
+    const t = setTimeout(() => {
+      setSearch({ field: searchField, value: raw });
+      setPage(0);
+    }, 400);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchInput, searchField]);
+
+  const clearSearch = () => { setSearchInput(''); setSearch(null); setPage(0); };
 
   // Apply the active tab's status filter to a query builder.
   //   active = "Ordered" (awaiting_deposit) — new orders needing action
@@ -110,6 +173,48 @@ export default function Admin() {
     const from = pageArg * PAGE_SIZE;
     const to   = from + PAGE_SIZE - 1;
 
+    // ----- SEARCH MODE -----
+    // Active search overrides the tabs entirely: it queries the base
+    // `orders` table across EVERY status, still paginated at PAGE_SIZE so
+    // even a very broad name search ("a") can never pull thousands of rows
+    // or time out. Name matching is partial + case-insensitive (ILIKE),
+    // served by the pg_trgm GIN index from migration 015. Queue number and
+    // order ID are exact, index/PK lookups. count:'exact' here is cheap —
+    // it only counts rows matching the (indexed) filter, and the pager
+    // needs it because the tab counts don't apply to search results.
+    const s = searchRef.current;
+    if (s) {
+      if (searchInvalidReason(s)) {
+        // Malformed input (bad UUID / non-numeric queue #): show the hint,
+        // never send a query Postgres would reject.
+        setRows([]);
+        setSearchTotal(0);
+        setLoading(false);
+        return;
+      }
+
+      let q = sb.from('orders').select('*', { count: 'exact' });
+      if (s.field === 'name') {
+        q = q.ilike('customer_name', `%${escapeLike(s.value)}%`);
+      } else if (s.field === 'queue') {
+        q = q.eq('queue_number', Number(s.value));
+      } else {
+        q = q.eq('id', s.value.toLowerCase());
+      }
+      q = q.order('queue_number', { ascending: false }).range(from, to);
+
+      const { data, count, error } = await q;
+      if (error) {
+        toast.show('Search failed: ' + error.message, 'error');
+        setLoading(false);
+        return;
+      }
+      setRows(data || []);
+      setSearchTotal(count || 0);
+      setLoading(false);
+      return;
+    }
+
     let q = sb
       .from('orders')
       .select('*');
@@ -172,20 +277,26 @@ export default function Admin() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [supabase, user?.publicMetadata?.role]);
 
-  // Current page of data — refetched whenever the tab or page changes.
-  // (Not background: navigating SHOULD show the loader.)
+  // Current page of data — refetched whenever the tab, page, or applied
+  // search changes. (Not background: navigating SHOULD show the loader.)
   useEffect(() => {
     const isUserAdmin = user?.publicMetadata?.role === 'admin';
     if (!supabase || !isUserAdmin) return;
     fetchPage(tab, page);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [supabase, user?.publicMetadata?.role, tab, page]);
+  }, [supabase, user?.publicMetadata?.role, tab, page, search]);
 
-  // Selection is per-page; drop it whenever the page changes.
-  useEffect(() => { setSelectedIds(new Set()); }, [page, tab]);
+  // Selection is per-view; drop it whenever the page, tab, or search changes.
+  useEffect(() => { setSelectedIds(new Set()); }, [page, tab, search]);
 
-  // Switching tabs always resets to the first page.
-  const changeTab = (t) => { setTab(t); setPage(0); setSelectedIds(new Set()); };
+  // Switching tabs always resets to the first page and exits search mode
+  // (the tabs and search are mutually exclusive views).
+  const changeTab = (t) => {
+    setTab(t);
+    setPage(0);
+    setSelectedIds(new Set());
+    if (searchRef.current || searchInput) { setSearchInput(''); setSearch(null); }
+  };
 
   // Single source of truth for the order tabs. The buttons AND the
   // per-tab total both read from this list, so they can never drift
@@ -201,10 +312,12 @@ export default function Admin() {
     { key: 'all',       label: 'All',           countKey: 'total'     },
   ];
 
-  // Total rows for the CURRENT tab — read from the cheap global counts,
-  // so the pager never pays for an exact count over the heavy view.
+  // Total rows for the CURRENT view. In search mode this is the exact
+  // match count returned with the search query; otherwise it's read from
+  // the cheap global tab counts, so the pager never pays for an exact
+  // count over the heavy view.
   const currentTabDef = ORDER_TABS.find((t) => t.key === tab) || ORDER_TABS[ORDER_TABS.length - 1];
-  const pageTotal = counts[currentTabDef.countKey] || 0;
+  const pageTotal = search ? searchTotal : (counts[currentTabDef.countKey] || 0);
 
   // If rows were removed from a later page (e.g. shipped/cancelled away),
   // clamp the current page back into range once counts refresh.
@@ -418,11 +531,69 @@ export default function Admin() {
               })}
             </div>
 
-            <div className="tab-nav">
+            {/* SEARCH — looks across ALL orders in every status.
+                While a search is active the tabs below are ignored
+                (and dimmed); clicking any tab clears the search. */}
+            <div style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: 10,
+              alignItems: 'center',
+              marginBottom: 14,
+            }}>
+              <select
+                className="form-select"
+                style={{ padding: '8px 10px', fontSize: '0.85rem', minWidth: 160, flex: '0 0 auto' }}
+                value={searchField}
+                onChange={(e) => setSearchField(e.target.value)}
+                aria-label="Search by"
+              >
+                {SEARCH_FIELDS.map((f) => (
+                  <option key={f.key} value={f.key}>{f.label}</option>
+                ))}
+              </select>
+              <input
+                className="form-input"
+                style={{ flex: '1 1 260px', maxWidth: 460, padding: '8px 12px', fontSize: '0.9rem' }}
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                placeholder={(SEARCH_FIELDS.find((f) => f.key === searchField) || SEARCH_FIELDS[0]).placeholder}
+                aria-label="Search all orders"
+              />
+              {(search || searchInput) && (
+                <button className="btn btn-ghost btn-small" onClick={clearSearch} type="button">
+                  ✕ Clear
+                </button>
+              )}
+            </div>
+
+            {search && (
+              searchInvalidReason(search) ? (
+                <div style={{
+                  marginBottom: 14,
+                  fontSize: '0.85rem',
+                  color: '#f2b84b',
+                }}>
+                  ⚠ {searchInvalidReason(search)}
+                </div>
+              ) : (
+                <div style={{
+                  marginBottom: 14,
+                  fontSize: '0.82rem',
+                  color: 'var(--blue)',
+                  fontFamily: 'var(--font-display)',
+                  letterSpacing: '0.04em',
+                }}>
+                  Searching all orders (every status) — {searchTotal} result{searchTotal === 1 ? '' : 's'}
+                </div>
+              )
+            )}
+
+            <div className="tab-nav" style={search ? { opacity: 0.45 } : undefined}>
               {ORDER_TABS.map((t) => (
                 <button
                   key={t.key}
-                  className={`tab-btn ${tab === t.key ? 'active' : ''}`}
+                  className={`tab-btn ${!search && tab === t.key ? 'active' : ''}`}
                   onClick={() => changeTab(t.key)}
                 >
                   {t.label} ({stats[t.countKey] || 0})
@@ -433,7 +604,9 @@ export default function Admin() {
             {loading ? (
               <div className="loading-center"><div className="loader loader-large" /></div>
             ) : filtered.length === 0 ? (
-              <div className="empty-state">No orders in this view.</div>
+              <div className="empty-state">
+                {search ? 'No orders match your search.' : 'No orders in this view.'}
+              </div>
             ) : (
               <>
                 {selectedIds.size > 0 && (
